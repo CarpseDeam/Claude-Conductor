@@ -7,8 +7,10 @@ import sys
 import json
 import time
 import logging
+from typing import TYPE_CHECKING
 
-from git import GitWorkflow
+if TYPE_CHECKING:
+    from git.contracts import WorkflowResult
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +63,6 @@ class ClaudeOutputWindow:
         self._git_branch = git_branch
         self._godot_project = godot_project
         self._process = None
-        self._git_result = None
         self._stats = self._init_stats()
         self._last_tool_type = None
 
@@ -198,18 +199,12 @@ class ClaudeOutputWindow:
                     self._root.after(0, lambda t=text, g=tag: self._append(t, g))
 
             self._process.wait()
-
-            self._git_result = None
-            try:
-                workflow = GitWorkflow(Path(self._project_path), self._git_branch)
-                self._git_result = workflow.run()
-            except Exception:
-                pass
-
             self._root.after(0, self._show_summary)
 
             if self._process.returncode == 0:
                 self._root.after(0, lambda: self._set_status("Completed successfully!", "#00ff00"))
+                git_thread = threading.Thread(target=self._auto_git_commit, daemon=True)
+                git_thread.start()
             else:
                 self._root.after(0, lambda: self._set_status(f"Exited with code {self._process.returncode}", "#ff6600"))
         
@@ -511,27 +506,6 @@ class ClaudeOutputWindow:
         else:
             self._append("│ Errors: 0\n", "success")
 
-        if self._git_result:
-            gr = self._git_result
-            if gr.committed and gr.commit_message:
-                self._append("│ Committed: ", "text")
-                self._append(f"{gr.commit_message}\n", "success")
-
-                status_parts = []
-                if gr.pushed:
-                    status_parts.append("pushed")
-                if gr.merged:
-                    status_parts.append("merged to main")
-                if gr.branch_cleaned:
-                    status_parts.append("branch deleted")
-
-                if status_parts:
-                    self._append(f"│ Git: {', '.join(status_parts)}\n", "info")
-
-            if gr.errors:
-                for err in gr.errors[:3]:
-                    self._append(f"│ Git error: {err}\n", "error")
-
         if self._godot_project:
             error_count = self._run_godot_validation()
             if error_count is not None:
@@ -541,6 +515,35 @@ class ClaudeOutputWindow:
                     self._append_tagged([("│ Godot: ✗ ", "error"), (f"{error_count} errors\n", "error")])
 
         self._append("└──────────────────────────────────────\n", "info")
+
+    def _auto_git_commit(self) -> None:
+        """Run git commit workflow in background. Non-blocking, errors logged not raised."""
+        git_dir = Path(self._project_path) / ".git"
+        if not git_dir.exists():
+            return
+
+        try:
+            from git.workflow import GitWorkflow
+            workflow = GitWorkflow(Path(self._project_path))
+            result = workflow.run()
+            self._root.after(0, lambda: self._update_git_status(result))
+        except Exception as e:
+            self._root.after(0, lambda: self._set_status(f"⚠ Git: {e}", "#FFA500"))
+
+    def _update_git_status(self, result: "WorkflowResult") -> None:
+        """Update status bar with git operation result."""
+        if result.committed and result.commit_message:
+            msg_preview = result.commit_message[:50]
+            if result.pushed:
+                self._set_status(f"✓ Committed & pushed: {msg_preview}", "#00ff00")
+            else:
+                self._set_status(f"✓ Committed locally: {msg_preview}", "#00ff00")
+        elif result.errors:
+            if "No changes to commit" in result.errors:
+                pass
+            else:
+                first_error = result.errors[0][:60]
+                self._set_status(f"⚠ Git: {first_error}", "#FFA500")
 
     def _on_close(self):
         if self._process and self._process.poll() is None:
@@ -563,7 +566,7 @@ class ClaudeOutputWindow:
 
 def main():
     if len(sys.argv) < 3:
-        print("Usage: gui_viewer.py <project_path> <prompt_file> [--add-dir <path>]... [--cli claude|gemini|codex] [--model <model>] [--git-branch <name>] [--godot-project <path>]")
+        print("Usage: gui_viewer.py <project_path> <prompt_file> [--add-dir <path>]... [--cli claude|gemini|codex] [--model <model>] [--git-branch <n>] [--godot-project <path>]")
         sys.exit(1)
 
     project_path = sys.argv[1]

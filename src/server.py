@@ -5,13 +5,10 @@ sys.path.insert(0, str(Path(__file__).parent))
 import asyncio
 import json
 import subprocess
-from datetime import datetime
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
 
-
-GODOT_EXE = r"C:\Users\carps\OneDrive\Desktop\Godot.exe"
 
 SYSTEM_PROMPT = (
     "Write clean, scalable, modular, efficient code. "
@@ -79,59 +76,6 @@ class ClaudeCodeMCPServer:
             )
         ]
     
-    def _create_git_branch(self, project_path: str) -> str | None:
-        git_dir = Path(project_path) / ".git"
-        if not git_dir.exists():
-            return None
-        
-        branch_name = f"claude/{datetime.now().strftime('%Y%m%d-%H%M%S')}"
-        
-        try:
-            subprocess.run(
-                ["git", "stash", "-u"],
-                cwd=project_path,
-                capture_output=True,
-                timeout=10
-            )
-            
-            result = subprocess.run(
-                ["git", "checkout", "-b", branch_name],
-                cwd=project_path,
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            
-            if result.returncode == 0:
-                return branch_name
-            return None
-        except Exception:
-            return None
-    
-    def _get_godot_errors(self, godot_project: str) -> list[str] | None:
-        if not Path(GODOT_EXE).exists():
-            return None
-        
-        if not Path(godot_project).exists():
-            return None
-        
-        try:
-            result = subprocess.run(
-                [GODOT_EXE, "--headless", "--quit", "--path", godot_project],
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-            
-            errors = []
-            for line in result.stderr.split('\n'):
-                if 'ERROR' in line or 'SCRIPT ERROR' in line:
-                    errors.append(line.strip())
-            
-            return errors if errors else None
-        except Exception:
-            return None
-    
     async def _call_tool(self, name: str, arguments: dict) -> list[TextContent]:
         if name != "launch_claude_code":
             return [TextContent(type="text", text=f"Unknown tool: {name}")]
@@ -141,31 +85,11 @@ class ClaudeCodeMCPServer:
         additional_paths = arguments.get("additional_paths", [])
         cli = arguments.get("cli", "claude")
         model = arguments.get("model")
-        git_branch_enabled = arguments.get("git_branch", True)
-        godot_project = arguments.get("godot_project")
         
         if not Path(project_path).exists():
             return [TextContent(type="text", text=f"Path does not exist: {project_path}")]
         
-        branch_name = None
-        if git_branch_enabled:
-            branch_name = self._create_git_branch(project_path)
-        
-        godot_errors = None
-        if godot_project:
-            godot_errors = self._get_godot_errors(godot_project)
-        
-        full_prompt = task
-        
-        if godot_errors:
-            errors_text = "\n".join(godot_errors)
-            full_prompt = (
-                f"CURRENT GODOT COMPILE ERRORS (fix these if relevant to your task):\n"
-                f"```\n{errors_text}\n```\n\n"
-                f"{task}"
-            )
-        
-        full_prompt = f"{full_prompt}\n\n{SYSTEM_PROMPT}"
+        full_prompt = f"{task}\n\n{SYSTEM_PROMPT}"
         
         prompt_file = Path(project_path) / "_claude_prompt.txt"
         prompt_file.write_text(full_prompt, encoding='utf-8')
@@ -174,21 +98,12 @@ class ClaudeCodeMCPServer:
         python_exe = sys.executable
         
         cmd = [python_exe, str(viewer_script), project_path, str(prompt_file)]
-        
         for p in additional_paths:
             if Path(p).exists():
                 cmd.extend(["--add-dir", p])
-        
         cmd.extend(["--cli", cli])
-        
         if model:
             cmd.extend(["--model", model])
-        
-        if branch_name:
-            cmd.extend(["--git-branch", branch_name])
-        
-        if godot_project:
-            cmd.extend(["--godot-project", godot_project])
         
         subprocess.Popen(
             cmd,
@@ -205,8 +120,6 @@ class ClaudeCodeMCPServer:
             "model": model or "default",
             "project_path": project_path,
             "additional_paths": additional_paths,
-            "git_branch": branch_name,
-            "godot_errors_found": len(godot_errors) if godot_errors else 0,
             "message": "GUI window opened with live output. Let me know when it finishes!"
         }
         return [TextContent(type="text", text=json.dumps(response, indent=2))]

@@ -2,7 +2,6 @@ from pathlib import Path
 
 from .contracts import WorkflowResult
 from .operations import GitOperations
-from .commit_message import CommitMessageGenerator
 
 
 class GitWorkflow:
@@ -11,7 +10,7 @@ class GitWorkflow:
     def __init__(self, project_path: Path, current_branch: str | None = None) -> None:
         self.project_path = project_path
         self.ops = GitOperations()
-        self.msg_generator = CommitMessageGenerator()
+        self.msg_generator = None
         self._current_branch = current_branch
 
     @property
@@ -23,8 +22,15 @@ class GitWorkflow:
     def _get_main_branch(self) -> str:
         return "main"
 
+    def _get_commit_message_generator(self):
+        if self.msg_generator is None:
+            from .commit_message import CommitMessageGenerator
+            self.msg_generator = CommitMessageGenerator()
+        return self.msg_generator
+
     def run(self) -> WorkflowResult:
         errors: list[str] = []
+        info: list[str] = []
         committed = False
         pushed = False
         merged = False
@@ -54,7 +60,8 @@ class GitWorkflow:
             )
 
         try:
-            commit_message = self.msg_generator.generate(diff)
+            generator = self._get_commit_message_generator()
+            commit_message = generator.generate(diff)
         except Exception as e:
             errors.append(f"Failed to generate commit message: {e}")
             return WorkflowResult(
@@ -78,6 +85,18 @@ class GitWorkflow:
                 errors=errors,
             )
         committed = True
+
+        has_remote = self.ops.has_remote(self.project_path)
+        if not has_remote:
+            info.append("No remote configured, committed locally")
+            return WorkflowResult(
+                committed=committed,
+                pushed=False,
+                merged=False,
+                branch_cleaned=False,
+                commit_message=commit_message,
+                errors=info,
+            )
 
         branch = self.current_branch
         if branch and GitOperations.is_claude_branch(branch):

@@ -95,6 +95,11 @@ class GitOperations:
         result = self._run(["git", "branch", "-d", branch], project_path)
         return result.returncode == 0
 
+    def has_remote(self, project_path: Path) -> bool:
+        """Check if the git repo has any remotes configured."""
+        result = self._run(["git", "remote"], project_path)
+        return result.returncode == 0 and bool(result.stdout.strip())
+
     @staticmethod
     def is_claude_branch(branch: str) -> bool:
         return branch.startswith("claude/")
