@@ -1,13 +1,11 @@
-import os
-
 import httpx
 
 from .contracts import GitDiff
 
 
 class CommitMessageGenerator:
-    API_URL = "https://api.anthropic.com/v1/messages"
-    MODEL = "claude-3-5-haiku-latest"
+    OLLAMA_URL = "http://localhost:11434/api/generate"
+    MODEL = "mistral:latest"
     TIMEOUT = 30
 
     SYSTEM_PROMPT = """You are a git commit message generator. Generate a commit message in conventional commit format.
@@ -22,35 +20,37 @@ Rules:
 - Be concise and specific
 - Return ONLY the commit message, nothing else"""
 
-    def __init__(self) -> None:
-        self.api_key = os.environ.get("ANTHROPIC_API_KEY")
-        if not self.api_key:
-            raise ValueError("ANTHROPIC_API_KEY environment variable not set")
-
     def generate(self, diff: GitDiff) -> str:
-        user_prompt = f"""Generate a commit message for this diff:
+        prompt = f"""{self.SYSTEM_PROMPT}
+
+Generate a commit message for this diff:
 
 Files changed: {', '.join(diff.files_changed)}
 
 Diff content:
 {diff.content[:4000]}"""
 
-        headers = {
-            "x-api-key": self.api_key,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-        }
-
         payload = {
             "model": self.MODEL,
-            "max_tokens": 100,
-            "system": self.SYSTEM_PROMPT,
-            "messages": [{"role": "user", "content": user_prompt}],
+            "prompt": prompt,
+            "stream": False,
+            "options": {
+                "num_predict": 100,
+                "temperature": 0.3
+            }
         }
 
         with httpx.Client(timeout=self.TIMEOUT) as client:
-            response = client.post(self.API_URL, headers=headers, json=payload)
+            response = client.post(self.OLLAMA_URL, json=payload)
             response.raise_for_status()
 
         data = response.json()
-        return data["content"][0]["text"].strip()
+        raw_response = data.get("response", "").strip()
+
+        commit_msg = raw_response.split('\n')[0].strip()
+        commit_msg = commit_msg.strip('"\'')
+
+        if len(commit_msg) > 72:
+            commit_msg = commit_msg[:69] + "..."
+
+        return commit_msg
