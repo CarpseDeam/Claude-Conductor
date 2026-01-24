@@ -48,6 +48,11 @@ class GitWorkflow:
                 errors=["No changes to commit"],
             )
 
+        self.ops.cleanup_windows_artifacts(self.project_path)
+
+        if self.ops.ensure_gitignore(self.project_path):
+            diff = self.ops.get_diff(self.project_path)
+
         if not self.ops.stage_all(self.project_path):
             errors.append("Failed to stage changes")
             return WorkflowResult(
