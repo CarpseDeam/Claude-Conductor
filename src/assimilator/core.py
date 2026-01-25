@@ -1,6 +1,7 @@
 """Core orchestrator for codebase assimilation."""
 
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +20,32 @@ from .output.formatter import ManifestFormatter
 
 class Assimilator:
     """Orchestrates codebase analysis to generate a manifest."""
+
+    MAX_WORKERS: int = 8
+    MAX_FILES: int = 500
+    MAX_FILE_SIZE: int = 100_000  # 100KB
+
+    SKIP_DIRS: set[str] = {
+        '.git', '.venv', 'venv', 'node_modules', '__pycache__',
+        '.idea', '.vscode', 'dist', 'build', '.egg-info',
+        'eggs', '.tox', '.mypy_cache', '.pytest_cache', '.conductor',
+    }
+
+    SKIP_EXTENSIONS: set[str] = {
+        '.pyc', '.pyo', '.so', '.dll', '.exe', '.bin',
+        '.png', '.jpg', '.jpeg', '.gif', '.ico', '.svg',
+        '.mp3', '.wav', '.mp4', '.avi', '.mov',
+        '.zip', '.tar', '.gz', '.rar',
+        '.db', '.sqlite', '.sqlite3',
+        '.lock', '.log',
+    }
+
+    CODE_EXTENSIONS: set[str] = {
+        '.py', '.js', '.ts', '.tsx', '.jsx', '.gd',
+        '.java', '.go', '.rs', '.rb', '.php', '.cs',
+        '.cpp', '.c', '.h', '.hpp', '.swift', '.kt', '.scala',
+        '.vue', '.svelte',
+    }
 
     def __init__(self, project_path: Path | str, use_cache: bool = True) -> None:
         """Initialize assimilator with project path."""
@@ -47,17 +74,75 @@ class Assimilator:
             PatternsExtractor(self.project_path),
         ]
 
-    def assimilate(self, force_refresh: bool = False) -> Manifest:
-        """Run all applicable analyzers and merge results into Manifest."""
+    def assimilate(self, force_refresh: bool = False, quick: bool = False) -> Manifest:
+        """
+        Run analyzers and merge results into Manifest.
+
+        Args:
+            force_refresh: Ignore cache and rebuild manifest.
+            quick: Fast shallow analysis (structure + basic symbols only). Target: <2 seconds.
+        """
         if self.use_cache and not force_refresh:
             cached = self.cache.get_cached(self.project_path)
             if cached:
                 self.logger.info("Using cached manifest")
                 return cached
 
-        self.logger.info("Analyzing project: %s", self.project_path)
+        if quick:
+            return self._quick_assimilate()
 
-        results: dict[str, Any] = {
+        return self._full_assimilate()
+
+    def _quick_assimilate(self) -> Manifest:
+        """Fast mode: structure + file list + basic detection. Target: <2 seconds."""
+        self.logger.info("Quick analyzing project: %s", self.project_path)
+
+        results: dict[str, Any] = self._init_results()
+
+        structure_analyzer = StructureAnalyzer(self.project_path)
+        self._merge_results(results, structure_analyzer.safe_analyze())
+
+        git_analyzer = GitAnalyzer(self.project_path)
+        self._merge_results(results, git_analyzer.safe_analyze())
+
+        python_analyzer = PythonAnalyzer(self.project_path)
+        self._merge_results(results, python_analyzer.safe_analyze())
+
+        results["entry_points"] = self._infer_entry_points(results)
+
+        manifest = self._build_manifest(results)
+
+        if self.use_cache:
+            self.cache.save(self.project_path, manifest)
+
+        return manifest
+
+    def _full_assimilate(self) -> Manifest:
+        """Full analysis with parallel file parsing."""
+        self.logger.info("Full analyzing project: %s", self.project_path)
+
+        results: dict[str, Any] = self._init_results()
+
+        analyzer_results = self._run_analyzers_parallel()
+        for ar in analyzer_results:
+            self._merge_results(results, ar)
+
+        extractor_results = self._run_extractors_parallel()
+        for er in extractor_results:
+            self._merge_results(results, er)
+
+        results["entry_points"] = self._infer_entry_points(results)
+
+        manifest = self._build_manifest(results)
+
+        if self.use_cache:
+            self.cache.save(self.project_path, manifest)
+
+        return manifest
+
+    def _init_results(self) -> dict[str, Any]:
+        """Initialize empty results dict."""
+        return {
             "project_name": self.project_path.name,
             "language": Language.UNKNOWN,
             "stack": [],
@@ -69,22 +154,71 @@ class Assimilator:
             "git_info": {},
         }
 
-        for analyzer in self.analyzers:
-            analyzer_results = analyzer.safe_analyze()
-            self._merge_results(results, analyzer_results)
+    def _run_analyzers_parallel(self) -> list[dict[str, Any]]:
+        """Run all analyzers in parallel."""
+        results: list[dict[str, Any]] = []
+        with ThreadPoolExecutor(max_workers=self.MAX_WORKERS) as executor:
+            futures = {executor.submit(a.safe_analyze): a for a in self.analyzers}
+            for future in as_completed(futures):
+                try:
+                    result = future.result(timeout=5)
+                    if result:
+                        results.append(result)
+                except Exception:
+                    pass
+        return results
 
-        for extractor in self.extractors:
-            extractor_results = extractor.safe_extract()
-            self._merge_results(results, extractor_results)
+    def _run_extractors_parallel(self) -> list[dict[str, Any]]:
+        """Run all extractors in parallel."""
+        results: list[dict[str, Any]] = []
+        with ThreadPoolExecutor(max_workers=self.MAX_WORKERS) as executor:
+            futures = {executor.submit(e.safe_extract): e for e in self.extractors}
+            for future in as_completed(futures):
+                try:
+                    result = future.result(timeout=10)
+                    if result:
+                        results.append(result)
+                except Exception:
+                    pass
+        return results
 
-        results["entry_points"] = self._infer_entry_points(results)
+    def _should_skip(self, path: Path) -> bool:
+        """Fast check if file/dir should be skipped."""
+        if any(skip in path.parts for skip in self.SKIP_DIRS):
+            return True
+        if path.suffix.lower() in self.SKIP_EXTENSIONS:
+            return True
+        if path.is_file():
+            try:
+                if path.stat().st_size > self.MAX_FILE_SIZE:
+                    return True
+            except OSError:
+                return True
+        return False
 
-        manifest = self._build_manifest(results)
+    def collect_files(self, extensions: set[str] | None = None) -> list[Path]:
+        """
+        Collect files to analyze, respecting limits.
 
-        if self.use_cache:
-            self.cache.save(self.project_path, manifest)
+        Args:
+            extensions: File extensions to include (e.g., {'.py', '.js'}). Defaults to CODE_EXTENSIONS.
+        """
+        if extensions is None:
+            extensions = self.CODE_EXTENSIONS
 
-        return manifest
+        files: list[Path] = []
+        try:
+            for path in self.project_path.rglob('*'):
+                if self._should_skip(path):
+                    continue
+                if path.is_file() and path.suffix.lower() in extensions:
+                    files.append(path)
+                if len(files) >= self.MAX_FILES:
+                    self.logger.warning("Hit file limit (%d), sampling", self.MAX_FILES)
+                    break
+        except PermissionError:
+            pass
+        return files
 
     def _merge_results(self, target: dict[str, Any], source: dict[str, Any]) -> None:
         """Merge source results into target."""

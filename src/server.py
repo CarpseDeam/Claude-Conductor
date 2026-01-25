@@ -32,10 +32,10 @@ class ClaudeCodeMCPServer:
             Tool(
                 name="get_manifest",
                 description=(
-                    "Get strategic overview of a codebase. ALWAYS call this FIRST before "
-                    "dispatching coding tasks - do NOT use Desktop Commander to read project files. "
-                    "Returns compressed project knowledge (~1-2K tokens): structure, components, "
-                    "patterns, stack. Cached and fast."
+                    "Get strategic overview of a codebase. Call this FIRST before coding tasks. "
+                    "Returns compressed project knowledge (~1-2K tokens). Cached after first run. "
+                    "For large/unknown projects, use quick=true for fast initial scan, or "
+                    "dispatch_assimilate for background full analysis."
                 ),
                 inputSchema={
                     "type": "object",
@@ -47,6 +47,28 @@ class ClaudeCodeMCPServer:
                         "refresh": {
                             "type": "boolean",
                             "description": "Force rebuild manifest, ignore cache (default: false)"
+                        },
+                        "quick": {
+                            "type": "boolean",
+                            "description": "Fast shallow analysis (default: false). Use for initial exploration."
+                        }
+                    },
+                    "required": ["project_path"]
+                }
+            ),
+            Tool(
+                name="dispatch_assimilate",
+                description=(
+                    "Dispatch background codebase analysis. Returns immediately. "
+                    "Use for large projects where get_manifest would be slow. "
+                    "Check status with get_task_result or just call get_manifest after completion."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "project_path": {
+                            "type": "string",
+                            "description": "Absolute path to project root"
                         }
                     },
                     "required": ["project_path"]
@@ -132,6 +154,8 @@ class ClaudeCodeMCPServer:
     async def _call_tool(self, name: str, arguments: dict) -> list[TextContent]:
         if name == "get_manifest":
             return self._handle_get_manifest(arguments)
+        elif name == "dispatch_assimilate":
+            return self._handle_dispatch_assimilate(arguments)
         elif name == "launch_claude_code":
             return self._handle_launch_claude_code(arguments)
         elif name == "get_task_result":
@@ -145,6 +169,7 @@ class ClaudeCodeMCPServer:
         """Handle get_manifest tool call."""
         project_path = Path(arguments["project_path"])
         refresh = arguments.get("refresh", False)
+        quick = arguments.get("quick", False)
 
         if not project_path.exists():
             return [TextContent(type="text", text=f"Path does not exist: {project_path}")]
@@ -154,16 +179,44 @@ class ClaudeCodeMCPServer:
 
         cache = ManifestCache()
 
-        if not refresh:
+        if not refresh and not quick:
             cached = cache.get_cached(project_path)
             if cached:
                 return [TextContent(type="text", text=json.dumps(cached.to_compressed_dict(), indent=2))]
 
         assimilator = Assimilator(project_path)
-        manifest = assimilator.assimilate()
-        cache.save(project_path, manifest)
+        manifest = assimilator.assimilate(force_refresh=refresh, quick=quick)
 
         return [TextContent(type="text", text=json.dumps(manifest.to_compressed_dict(), indent=2))]
+
+    def _handle_dispatch_assimilate(self, arguments: dict) -> list[TextContent]:
+        """Handle dispatch_assimilate tool call - spawn background analysis."""
+        project_path = Path(arguments["project_path"])
+
+        if not project_path.exists():
+            return [TextContent(type="text", text=f"Path does not exist: {project_path}")]
+
+        from tasks.tracker import TaskTracker
+
+        tracker = TaskTracker()
+        task_id = tracker.create_task(str(project_path), cli="assimilator")
+
+        script = Path(__file__).parent / "assimilator_runner.py"
+
+        subprocess.Popen(
+            [sys.executable, str(script), str(project_path), task_id],
+            creationflags=subprocess.CREATE_NO_WINDOW,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+        )
+
+        response = {
+            "status": "dispatched",
+            "task_id": task_id,
+            "message": "Assimilation running in background. Call get_manifest(project_path) when ready."
+        }
+        return [TextContent(type="text", text=json.dumps(response, indent=2))]
 
     def _handle_launch_claude_code(self, arguments: dict) -> list[TextContent]:
         """Handle launch_claude_code tool call."""

@@ -9,3 +9,5 @@ build/
 target/
 .env
 _claude_prompt.txt
+
+.conductor/
