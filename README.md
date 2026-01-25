@@ -1,158 +1,92 @@
-# ClaudeDesktop-ClaudeCode-Bridge
+# Conductor
 
-![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)
-![License MIT](https://img.shields.io/badge/license-MIT-green)
-![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-orange)
+> Bridge Claude Desktop to CLI coding agents with real-time streaming visualization
 
-**Bridge Claude Desktop to CLI coding agents with real-time streaming visualization.**
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)]()
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)]()
 
-This Model Context Protocol (MCP) server enables Claude Desktop to dispatch complex coding tasks to specialized CLI agents (Claude Code, Gemini CLI, OpenAI Codex) while providing a real-time, color-coded visualization of the execution.
+One MCP tool. Multiple AI agents. Zero context switching.
 
-- **Multi-Backend Support**: Seamlessly switch between Claude Code, Gemini CLI, and OpenAI Codex.
-- **Real-Time Visualization**: Watch the agent's thought process, tool usage, and file edits live.
-- **Auto-Git Workflow**: Automatic commit generation and branch management using local LLMs (Ollama).
-- **Godot Integration**: Optional automated project validation for Godot 4.x game development.
-- **Safety First**: Runs agents in a separate process with visible output and controlled execution.
+## Features
 
-## Architecture Overview
+- 🚀 **Dispatch coding tasks** to Claude Code, Gemini CLI, or OpenAI Codex
+- 📊 **Live streaming GUI** with color-coded tool calls
+- 🧠 **Codebase assimilation** - compressed project knowledge for Desktop
+- 🔄 **Auto git commits** with AI-generated messages (Ollama)
+- 📝 **Auto documentation** - Gemini keeps docs fresh after every commit
+- ⚡ **Non-blocking** - Desktop stays responsive while agents work
 
-The system uses the MCP stdio pattern to expose a single "launcher" tool to Claude Desktop. This tool spawns a detached GUI viewer that wraps the target CLI agent.
-
-```mermaid
-graph LR
-    CD[Claude Desktop] -->|MCP Protocol| Server[MCP Server]
-    Server -->|Spawn| GUI[GUI Viewer]
-    GUI -->|Execute| CLI[CLI Backend]
-    CLI -->|Read/Write| Project[User Project]
-    GUI -->|Stream Output| User[User Visual Feedback]
-    GUI -->|Auto-Commit| Git[Git/Ollama]
-```
-
-## Supported CLI Backends
-
-| CLI | Command Pattern | Default Model | Available Models |
-| :--- | :--- | :--- | :--- |
-| **Claude Code** | `claude -p ...` | `opus` | `opus`, `sonnet` |
-| **Gemini CLI** | `gemini ...` | `gemini-3-pro-preview` | `gemini-2.5-flash`, `gemini-2.5-pro`, `gemini-3-pro-preview` |
-| **OpenAI Codex** | `codex exec ...` | `gpt-5-codex` | `gpt-5-codex`, `gpt-5.2-codex` |
-
-## Installation
+## Quick Start
 
 ### Prerequisites
-- Python 3.11 or higher
-- [Ollama](https://ollama.com/) running locally (for git commit generation)
-  - Pull the model: `ollama pull mistral:latest`
-- The CLI tools you intend to use (`claude`, `gemini`, etc.) installed and available in your PATH.
 
-### Setup
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/yourusername/claude-code-bridge.git
-   cd claude-code-bridge
-   ```
+- Python 3.11+
+- At least one CLI agent installed:
+  - [Claude Code](https://github.com/anthropics/claude-code)
+  - [Gemini CLI](https://github.com/google-gemini/gemini-cli)
+  - [OpenAI Codex](https://github.com/openai/codex)
 
-2. Install dependencies:
-   ```bash
-   pip install .
-   ```
+### Install
 
-### Claude Desktop Configuration
-Add the server to your Claude Desktop configuration file (e.g., `%APPDATA%\Claude\claude_desktop_config.json` on Windows).
+```bash
+pip install -e .
+```
+
+### Configure Claude Desktop
+
+Add to your `claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
-    "claude-code-bridge": {
+    "conductor": {
       "command": "python",
-      "args": [
-        "path/to/claude-code-bridge/src/server.py"
-      ]
+      "args": ["-m", "src.server"],
+      "cwd": "C:\\Projects\\ClaudeDesktop-ClaudeCode-Bridge"
     }
   }
 }
 ```
 
-## Usage
+### Usage
 
-When connected, Claude Desktop will have access to the `launch_claude_code` tool. You can ask Claude to "build a feature" or "fix a bug" in a specific project.
+Just talk to Claude Desktop:
 
-### Tool Schema
-The tool accepts the following parameters:
-- `task`: Detailed description of the work to be done.
-- `project_path`: **Exact** absolute path to the project directory.
-- `cli`: Backend to use (`claude`, `gemini`, `codex`). Default is `claude`.
-- `model`: (Optional) Specific model to use.
-- `additional_paths`: (Optional) List of extra directories the agent should have access to.
-- `godot_project`: (Optional) Path to a `project.godot` file for validation.
+> "Get the manifest for my project at C:\Projects\my-api"
 
-### Example Interaction
-**User:** "Can you use Gemini to fix the navigation bug in my React app at C:\Projects\MyApp?"
+> "Add password reset to the auth system"
 
-**Claude:** *Calls `launch_claude_code(task="Fix navigation bug...", project_path="C:\\Projects\\MyApp", cli="gemini")`*
+> "Have Gemini review the last changes"
 
-A new window will open on your desktop showing Gemini analyzing the code, running searches, and making edits.
+## MCP Tools
 
-## Git Integration
+| Tool | Purpose |
+|------|---------|
+| `get_manifest` | Get compressed codebase knowledge (~1-2K tokens) |
+| `launch_claude_code` | Dispatch coding task to any CLI agent |
+| `get_task_result` | Get results after task completion |
+| `list_recent_tasks` | See recent dispatches |
+| `dispatch_assimilate` | Background codebase analysis |
 
-The bridge includes an automated git workflow to keep your project clean.
+See [API Reference](docs/API.md) for full documentation.
 
-- **Auto-Commit**: After a task completes successfully, the system scans for changes.
-- **Message Generation**: Uses a local Ollama instance (`mistral:latest`) to generate a Conventional Commit message based on the diff.
-- **Branch Management**:
-  - If on a `claude/*` branch, it pushes, merges to `main`, and deletes the feature branch.
-  - If on `main`, it pushes directly.
-  - Generates a sensible `.gitignore` if one is missing.
+## How It Works
 
-**Requirement:** Ensure `ollama serve` is running in the background.
-
-## Configuration
-
-### Godot 4.x Validation
-To enable automatic Godot project validation:
-1. Ensure `Godot.exe` is installed.
-2. Pass the `--godot-project <path>` argument or let Claude infer it.
-3. The GUI will run Godot in headless mode after the task to check for import or script errors.
-
-*Note: The path to Godot is currently hardcoded in `src/gui_viewer.py`. You may need to update `GODOT_EXE` to match your system.*
-
-## GUI Features
-
-The detached GUI window provides visibility into the "black box" of CLI agents.
-
-- **Color-Coded Stream**:
-  - <span style="color:cyan">READ</span>: File reading operations.
-  - <span style="color:gold">EDIT</span>: File modification/writing.
-  - <span style="color:gold">BASH</span>: Shell command execution.
-  - <span style="color:red">ERROR</span>: Failures or stderr output.
-- **Live Status**: Shows current action and session status.
-- **Summary Panel**:
-  - Execution duration.
-  - List of modified files.
-  - Total tool calls.
-  - Validation results (Godot/Linter).
-
-## Development
-
-### Project Structure
 ```
-C:\Projects\ClaudeDesktop-ClaudeCode-Bridge\
-├── src\
-│   ├── server.py           # Main MCP Entry Point
-│   ├── gui_viewer.py       # Tkinter Visualization & CLI Wrapper
-│   └── git                # Git Automation Module
-│       ├── workflow.py     # Main Git Logic
-│       ├── operations.py   # Low-level Git Commands
-│       └── commit_message.py # Ollama Integration
-├── pyproject.toml          # Project Metadata
-└── README.md               # Documentation
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│  Claude Desktop │────▶│    Conductor    │────▶│   CLI Agent     │
+│   (strategic)   │ MCP │  (orchestrator) │     │  (tactical)     │
+└─────────────────┘     └────────┬────────┘     └────────┬────────┘
+                                 │                       │
+                                 ▼                       ▼
+                        ┌─────────────────┐     ┌─────────────────┐
+                        │    Manifest     │     │   Streaming     │
+                        │    (cached)     │     │      GUI        │
+                        └─────────────────┘     └─────────────────┘
 ```
 
-### Adding a New Backend
-To add a new CLI agent:
-1. Open `src/gui_viewer.py`.
-2. Add a new entry to the `CLI_CONFIGS` dictionary with the command pattern and flags.
-3. Implement a format handler (e.g., `_format_line_newcli`) if the CLI outputs a unique JSON structure.
+See [Architecture](docs/ARCHITECTURE.md) for details.
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+MIT
