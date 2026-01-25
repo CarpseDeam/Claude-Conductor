@@ -4,22 +4,31 @@ import json
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
-AUTO_DOCS_PROMPT = '''Review this git diff and update documentation as needed.
+AUTO_DOCS_PROMPT = '''You are a documentation maintainer. Review this git diff and update project documentation.
 
 DIFF:
 {diff}
 
+DOCUMENTATION FILES:
+- docs/CHANGELOG.md - Change history (ALWAYS update this)
+- docs/ARCHITECTURE.md - System design (update if structure changed)
+- docs/API.md - API reference (update if public interfaces changed)
+- README.md - User-facing docs (update if features/install changed)
+
 RULES:
-1. Update CHANGELOG.md - add entry under [Unreleased] section
-2. Update README.md ONLY if public API or install process changed
-3. Update docs/API.md ONLY if MCP tool signatures changed
-4. Update docs/ARCHITECTURE.md ONLY if new modules or data flows added
+1. ALWAYS add an entry to CHANGELOG.md under [Unreleased]
+   Format: "- type: description" (feat/fix/refactor/docs)
 
-Be surgical. Only modify what NEEDS updating.
-If nothing needs updating, make no changes.
-Keep tone consistent with existing docs.
+2. If docs are mostly empty/placeholder, flesh them out based on what you
+   can infer from the diff and codebase
 
-After updating, commit with message: "docs: [brief description]"
+3. If docs exist, be surgical - only modify what needs updating
+
+4. Keep tone professional and concise
+
+5. After updating, commit with message: "docs: [brief description]"
+
+If the diff is only documentation changes, you can skip (no recursive doc updates).
 '''
 
 

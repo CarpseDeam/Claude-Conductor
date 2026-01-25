@@ -23,6 +23,9 @@ class PipelineRunner:
 
     def run_post_commit(self, diff: str) -> None:
         """Run all enabled post-commit pipelines. Non-blocking."""
+        from .auto_docs import ensure_doc_structure
+        ensure_doc_structure(self.project_path)
+
         for step in self.config.post_commit:
             if not step.enabled:
                 continue
