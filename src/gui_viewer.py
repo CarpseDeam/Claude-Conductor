@@ -52,7 +52,7 @@ class ClaudeOutputWindow:
 
     def __init__(self, project_path: str, prompt: str, additional_dirs: list = None,
                  prompt_file: str = None, cli: str = "claude", model: str = None,
-                 git_branch: str = None, godot_project: str = None):
+                 git_branch: str = None, godot_project: str = None, task_id: str = None):
         self._project_path = project_path
         self._prompt = prompt
         self._additional_dirs = additional_dirs or []
@@ -62,6 +62,7 @@ class ClaudeOutputWindow:
         self._model = model or self._config.get("default_model")
         self._git_branch = git_branch
         self._godot_project = godot_project
+        self._task_id = task_id
         self._process = None
         self._stats = self._init_stats()
         self._last_tool_type = None
@@ -203,14 +204,17 @@ class ClaudeOutputWindow:
 
             if self._process.returncode == 0:
                 self._root.after(0, lambda: self._set_status("Completed successfully!", "#00ff00"))
+                self._report_task_completion()
                 git_thread = threading.Thread(target=self._auto_git_commit, daemon=True)
                 git_thread.start()
             else:
                 self._root.after(0, lambda: self._set_status(f"Exited with code {self._process.returncode}", "#ff6600"))
+                self._report_task_failure(f"Process exited with code {self._process.returncode}")
         
         except Exception as e:
             self._root.after(0, lambda: self._append(f"\nERROR: {e}\n", "error"))
             self._root.after(0, lambda: self._set_status(f"Error: {e}", "#ff0000"))
+            self._report_task_failure(str(e))
     
     def _format_line(self, line: str) -> list:
         if self._cli == "gemini":
@@ -516,6 +520,39 @@ class ClaudeOutputWindow:
 
         self._append("└──────────────────────────────────────\n", "info")
 
+    def _report_task_completion(self) -> None:
+        """Report task completion to tracker."""
+        if not self._task_id:
+            return
+        try:
+            from tasks.tracker import TaskTracker
+            tracker = TaskTracker()
+            files_modified = self._stats.get("files_written", [])
+            summary = self._build_summary()
+            tracker.complete_task(self._task_id, files_modified, summary)
+        except Exception as e:
+            logger.warning(f"Failed to report task completion: {e}")
+
+    def _report_task_failure(self, error: str) -> None:
+        """Report task failure to tracker."""
+        if not self._task_id:
+            return
+        try:
+            from tasks.tracker import TaskTracker
+            tracker = TaskTracker()
+            tracker.fail_task(self._task_id, error)
+        except Exception as e:
+            logger.warning(f"Failed to report task failure: {e}")
+
+    def _build_summary(self) -> str:
+        """Build summary string from stats."""
+        duration = int(time.time() - self._stats["start_time"])
+        files_read = len(self._stats["files_read"])
+        files_written = len(self._stats["files_written"])
+        tools_used = self._stats["tools_used"]
+        errors = self._stats["errors"]
+        return f"Duration: {duration}s, Files read: {files_read}, Files modified: {files_written}, Tool calls: {tools_used}, Errors: {errors}"
+
     def _auto_git_commit(self) -> None:
         """Run git commit workflow in background. Non-blocking, errors logged not raised."""
         git_dir = Path(self._project_path) / ".git"
@@ -566,7 +603,7 @@ class ClaudeOutputWindow:
 
 def main():
     if len(sys.argv) < 3:
-        print("Usage: gui_viewer.py <project_path> <prompt_file> [--add-dir <path>]... [--cli claude|gemini|codex] [--model <model>] [--git-branch <n>] [--godot-project <path>]")
+        print("Usage: gui_viewer.py <project_path> <prompt_file> [--add-dir <path>]... [--cli claude|gemini|codex] [--model <model>] [--git-branch <n>] [--godot-project <path>] [--task-id <id>]")
         sys.exit(1)
 
     project_path = sys.argv[1]
@@ -577,6 +614,7 @@ def main():
     model = None
     git_branch = None
     godot_project = None
+    task_id = None
 
     i = 3
     while i < len(sys.argv):
@@ -595,6 +633,9 @@ def main():
         elif sys.argv[i] == "--godot-project" and i + 1 < len(sys.argv):
             godot_project = sys.argv[i + 1]
             i += 2
+        elif sys.argv[i] == "--task-id" and i + 1 < len(sys.argv):
+            task_id = sys.argv[i + 1]
+            i += 2
         else:
             i += 1
 
@@ -602,7 +643,7 @@ def main():
 
     window = ClaudeOutputWindow(
         project_path, prompt, additional_dirs, prompt_file, cli, model,
-        git_branch, godot_project
+        git_branch, godot_project, task_id
     )
     window.run()
 
