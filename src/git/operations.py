@@ -107,8 +107,9 @@ class GitOperations:
     def is_claude_branch(branch: str) -> bool:
         return branch.startswith("claude/")
 
-    def cleanup_windows_artifacts(self, project_path: Path) -> None:
-        """Delete Windows reserved name files that break git."""
+    def cleanup_artifacts(self, project_path: Path) -> None:
+        """Delete artifacts that shouldn't be committed."""
+        # Windows reserved names that break git
         reserved_names = ["nul", "con", "aux", "prn", "com1", "com2", "com3", "com4", "lpt1", "lpt2", "lpt3"]
         for name in reserved_names:
             file_path = project_path / name
@@ -117,6 +118,14 @@ class GitOperations:
                     os.remove(f"\\\\?\\{file_path.resolve()}")
                 except Exception:
                     pass
+        
+        # Claude Code Bridge prompt file
+        prompt_file = project_path / "_claude_prompt.txt"
+        if prompt_file.exists():
+            try:
+                prompt_file.unlink()
+            except Exception:
+                pass
 
     def ensure_gitignore(self, project_path: Path) -> bool:
         """Create a sensible .gitignore if one doesn't exist. Returns True if created."""
@@ -149,6 +158,9 @@ class GitOperations:
             ".vscode/",
             "*.swp",
             "*.swo",
+            "",
+            "# === Claude Code Bridge ===",
+            "_claude_prompt.txt",
             "",
         ]
 

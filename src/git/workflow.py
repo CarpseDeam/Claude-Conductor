@@ -48,7 +48,7 @@ class GitWorkflow:
                 errors=["No changes to commit"],
             )
 
-        self.ops.cleanup_windows_artifacts(self.project_path)
+        self.ops.cleanup_artifacts(self.project_path)
 
         if self.ops.ensure_gitignore(self.project_path):
             diff = self.ops.get_diff(self.project_path)
