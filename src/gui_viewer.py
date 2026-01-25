@@ -575,12 +575,25 @@ class ClaudeOutputWindow:
                 self._set_status(f"✓ Committed & pushed: {msg_preview}", "#00ff00")
             else:
                 self._set_status(f"✓ Committed locally: {msg_preview}", "#00ff00")
+            if result.diff_content:
+                self._run_post_commit_pipelines(result.diff_content)
         elif result.errors:
             if "No changes to commit" in result.errors:
                 pass
             else:
                 first_error = result.errors[0][:60]
                 self._set_status(f"⚠ Git: {first_error}", "#FFA500")
+
+    def _run_post_commit_pipelines(self, diff_content: str) -> None:
+        """Fire post-commit pipelines. Non-blocking."""
+        try:
+            from pipelines.runner import PipelineRunner
+
+            runner = PipelineRunner(Path(self._project_path))
+            runner.run_post_commit(diff_content)
+            logger.info("Post-commit pipelines dispatched")
+        except Exception as e:
+            logger.warning(f"Post-commit pipeline failed: {e}")
 
     def _on_close(self):
         if self._process and self._process.poll() is None:
