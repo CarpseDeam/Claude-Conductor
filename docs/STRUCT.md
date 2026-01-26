@@ -7,7 +7,7 @@
 - `docs/` - Documentation (4 files)
 - `src/` - Source code (3 files)
 - `src\git/` - Project files (5 files)
-- `src\mapper/` - Project files (4 files)
+- `src\mapper/` - Project files (5 files)
 - `src\pipelines/` - Project files (4 files)
 - `src\specs/` - Project files (4 files)
 - `src\tasks/` - Project files (3 files)
@@ -19,6 +19,7 @@
 - `src\pipelines\config.py` - Configuration
 - `src\gui_viewer.py` - Source code
 - `src\mapper\mapper.py` - Source code
+- `src\mapper\git_info.py` - Source code
 - `src\specs\prompts.py` - Source code
 - `src\git\operations.py` - Source code
 - `src\mapper\parser.py` - Source code
@@ -51,6 +52,18 @@
 _Pipeline configuration management._
 
 **PipelineConfig**: `load(cls, project_path: Path) -> 'PipelineConfig', save(self, project_path: Path) -> None`
+
+### `src\mapper\mapper.py`
+_Main codebase mapping logic._
+
+**CodebaseMap**: `to_markdown(self) -> str`
+**CodebaseMapper**: `map(self) -> CodebaseMap`
+
+### `src\mapper\git_info.py`
+_Git history and status extraction._
+
+**RecentCommit**: `hash, message, files`
+**GitInfoExtractor**: `get_recent_commits(self, project_path: Path, limit: int = 5) -> list[RecentCommit], get_uncommitted_changes(self, project_path: Path) -> list[str]`
 
 ### `src\specs\prompts.py`
 _Prompt templates for spec-driven development._

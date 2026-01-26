@@ -22,6 +22,7 @@ mapper/
 ├── mapper.py            # Main mapping logic
 ├── detector.py          # Language and stack detection
 ├── parser.py            # AST-based Python module analysis
+├── git_info.py          # Git history and status extraction
 └── contracts.py         # Data structures
 ```
 
@@ -30,6 +31,10 @@ The mapper performs deep analysis of Python modules using the `PythonParser`, wh
 - **Class structures**, including inheritance and public methods.
 - **Function signatures** with type hints.
 - **Key imports** to understand internal dependencies.
+
+It also integrates Git context via `GitInfoExtractor` to provide:
+- **Recent commit history** with lists of modified files.
+- **Uncommitted changes** to identify work-in-progress.
 
 
 ### GUI Viewer (`src/gui_viewer.py`)
