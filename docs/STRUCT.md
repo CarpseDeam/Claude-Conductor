@@ -22,6 +22,7 @@
 - `src\mapper\mapper.py` - Source code
 - `src\mapper\git_info.py` - Source code
 - `src\specs\prompts.py` - Source code
+- `src\specs\validator.py` - Spec validation logic
 - `src\git\operations.py` - Source code
 - `src\mapper\parser.py` - Source code
 - `README.md` - Documentation
@@ -97,6 +98,12 @@ _Parser for markdown spec format._
 _Spec-driven development contracts and data structures._
 
 **SpecDocument**: `to_prompt_context(self) -> str`
+**SpecValidationResult**: `is_valid, spec, errors`
+
+### `src\specs\validator.py`
+_Spec validation logic._
+
+**Functions**: `validate_spec(markdown: str) -> SpecValidationResult`
 
 ### `src\pipelines\runner.py`
 _Pipeline execution engine._

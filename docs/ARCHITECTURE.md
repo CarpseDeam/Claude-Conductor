@@ -55,6 +55,7 @@ Tracks dispatched tasks and results:
 
 Handles executable specification parsing and prompt building:
 - Parses compact markdown specs (Interface, Must Do, Edge Cases)
+- **Validation**: Provides `validate_spec` for non-throwing verification of spec format and requirements.
 - Generates system prompts for TDD-driven implementation
 - **Spec-First Strategy**: Instructs agents to treat the specification as the source of truth, minimizing unnecessary codebase exploration to ensure strict adherence to the defined interface.
 - Defines validation requirements (tests, lint, typecheck)
