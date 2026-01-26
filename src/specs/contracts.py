@@ -118,27 +118,6 @@ class SpecDocument:
 
 
 @dataclass
-class PhaseResult:
-    """Result of a single phase execution."""
-
-    phase: Literal["tests", "impl"]
-    success: bool
-    duration_seconds: float
-    files_created: list[str]
-    error: str | None
-
-
-@dataclass
-class SpecExecutionResult:
-    """Result of complete spec execution (both phases)."""
-
-    phase1: PhaseResult
-    phase2: PhaseResult | None
-    total_duration_seconds: float
-    success: bool
-
-
-@dataclass
 class PhaseRequest:
     """Request for a single phase execution."""
 

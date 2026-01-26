@@ -61,35 +61,14 @@ class DispatchHandler:
         )
 
     def build_prompt(self, request: DispatchRequest, system_prompt: str) -> str:
-        """Build the full prompt for CLI execution (phase 1 for spec mode)."""
+        """Build the full prompt for CLI execution."""
         if request.mode == DispatchMode.SPEC and request.phase_runner:
-            phase1_request = request.phase_runner.get_phase1_request()
-            prompt = phase1_request.prompt
-        elif request.mode == DispatchMode.SPEC:
-            spec = self.spec_parser.parse(request.content)
-            prompt = self.prompt_builder.build_phase1_prompt(spec)
+            spec_request = request.phase_runner.get_request()
+            prompt = spec_request.prompt
         else:
             prompt = request.content
 
         return f"{prompt}\n\n{system_prompt}"
-
-    def build_phase2_prompt(self, request: DispatchRequest, test_path: str, system_prompt: str) -> str | None:
-        """Build the phase 2 prompt for implementation."""
-        if request.mode != DispatchMode.SPEC or not request.phase_runner:
-            return None
-
-        request.phase_runner.complete_phase1(success=True, test_path=test_path)
-        phase2_request = request.phase_runner.get_phase2_request()
-        if not phase2_request:
-            return None
-
-        return f"{phase2_request.prompt}\n\n{system_prompt}"
-
-    def get_test_path(self, request: DispatchRequest) -> str | None:
-        """Get the expected test path for spec mode."""
-        if request.mode != DispatchMode.SPEC or not request.phase_runner:
-            return None
-        return request.phase_runner.infer_test_path()
 
     def _detect_mode(self, content: str) -> DispatchMode:
         """Detect dispatch mode from content."""

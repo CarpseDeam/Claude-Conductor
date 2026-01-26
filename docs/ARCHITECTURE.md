@@ -53,9 +53,9 @@ Tracks dispatched tasks and results:
 Handles executable specification parsing and prompt building:
 - Parses compact markdown specs (Interface, Must Do, Edge Cases)
 - **Validation**: Provides `validate_spec` for non-throwing verification of spec format and requirements.
-- **Two-Phase Execution**: Implements a structured TDD workflow managed by `SpecPhaseRunner`:
-  - **Phase 1 (Tests)**: Agent generates a complete pytest suite based solely on the spec.
-  - **Phase 2 (Implementation)**: Agent implements the feature to pass the generated tests.
+- **Single-Phase Execution**: Implements a unified workflow managed by `SpecPhaseRunner`:
+  - **Unified Prompt**: A single prompt instructs the agent to 1) implement the interface, then 2) write tests to verify all requirements.
+  - **TDD Workflow**: Maintains TDD principles by requiring tests that validate the contract and behavior.
 - **Spec-First Strategy**: Instructs agents to treat the specification as the source of truth, minimizing unnecessary codebase exploration to ensure strict adherence to the defined interface.
 - **Circuit Breaker**: Implements an 8-read limit for specification-based tasks. If an agent makes more than 8 file reads without writing code, it is forced to stop exploration and begin implementation based on the spec.
 - **Output Compression**: Instructs agents to summarize validation output (test results, linter errors) into compact formats to prevent context bloat during iterative development.

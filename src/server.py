@@ -132,12 +132,13 @@ class ClaudeCodeMCPServer:
                 name="dispatch",
                 description=(
                     "Dispatch a coding task to CLI agent. Auto-detects mode from content:\n\n"
-                    "**SPEC MODE (preferred for features):** Content starts with '## Spec:' triggers two-phase execution:\n"
-                    "- Phase 1: Generate tests only (fresh context)\n"
-                    "- Phase 2: Implement against tests (fresh context)\n\n"
+                    "**SPEC MODE (preferred for features):** Content starts with '## Spec:' triggers spec-driven execution:\n"
+                    "- Agent implements the interface first\n"
+                    "- Agent writes tests that verify each Must Do and Edge Case\n"
+                    "- Tests validate contract/behavior, not implementation details\n\n"
                     "Spec format:\n"
                     "```\n"
-                    "## Spec: FeatureName\n"
+                    "## Spec: FeatureName [TIER]\n"
                     "Brief description.\n\n"
                     "### Interface\n"
                     "- `ClassName.method(params) -> ReturnType` — Description\n\n"
@@ -147,9 +148,14 @@ class ClaudeCodeMCPServer:
                     "- Forbidden behaviors\n\n"
                     "### Edge Cases\n"
                     "- Edge case → expected behavior\n\n"
-                    "### Target Paths\n"
-                    "- `src/module.py` — Description\n"
+                    "### Target Path\n"
+                    "src/module.py\n\n"
+                    "### Validation\n"
+                    "```yaml\n"
+                    "tests: pytest tests/ -v\n"
+                    "```\n"
                     "```\n\n"
+                    "TIERS: HOTFIX (minimal), FEATURE (standard), SYSTEM (comprehensive)\n\n"
                     "**PROSE MODE:** For bug fixes, refactors, exploratory work. Just describe what to do.\n\n"
                     "USE SPEC MODE for any non-trivial feature. USE PROSE MODE only for simple fixes."
                 ),
@@ -207,6 +213,14 @@ class ClaudeCodeMCPServer:
                     }
                 }
             ),
+            Tool(
+                name="health_check",
+                description="Check server health status.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {}
+                }
+            ),
         ]
 
     async def _call_tool(self, name: str, arguments: dict) -> list[TextContent]:
@@ -220,6 +234,8 @@ class ClaudeCodeMCPServer:
             return self._handle_get_task_result(arguments)
         elif name == "list_recent_tasks":
             return self._handle_list_recent_tasks(arguments)
+        elif name == "health_check":
+            return self._handle_health_check(arguments)
         else:
             return [TextContent(type="text", text=f"Unknown tool: {name}")]
 
@@ -342,14 +358,6 @@ class ClaudeCodeMCPServer:
 
         if request.mode == DispatchMode.SPEC:
             cmd.append("--spec-mode")
-            test_path = handler.get_test_path(request)
-            if test_path:
-                cmd.extend(["--test-path", test_path])
-                phase2_prompt = handler.build_phase2_prompt(request, test_path, SYSTEM_PROMPT)
-                if phase2_prompt:
-                    phase2_file = Path(project_path) / "_dispatch_prompt_phase2.txt"
-                    phase2_file.write_text(phase2_prompt, encoding='utf-8')
-                    cmd.extend(["--phase2-prompt", str(phase2_file)])
 
         subprocess.Popen(
             cmd,
@@ -425,6 +433,16 @@ class ClaudeCodeMCPServer:
             })
 
         return [TextContent(type="text", text=json.dumps(tasks, indent=2))]
+
+    def _handle_health_check(self, arguments: dict) -> list[TextContent]:
+        """Returns server status."""
+        from datetime import datetime
+        result = {
+            "status": "ok",
+            "timestamp": datetime.now().isoformat(),
+            "version": "1.0.0"
+        }
+        return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
     async def run(self):
         async with stdio_server() as (read_stream, write_stream):

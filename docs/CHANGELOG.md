@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+- 2026-01-26: refactor: unify two-phase spec execution into a single-phase (implement then test) workflow
+- 2026-01-26: feat: auto-fail stale tasks in DispatchGuard after 10 minutes
+- 2026-01-26: refactor: update dispatch and get_task_result tool descriptions for better protocol adherence
 - 2026-01-26: feat: implement `DispatchGuard` to prevent duplicate and concurrent task dispatches
 - 2026-01-26: refactor: update system prompt with stricter code size and refactoring standards
 - 2026-01-26: feat: include full CLI output in task results and TaskTracker

@@ -54,20 +54,22 @@ _Data models for the user service._
 ### dispatch
 
 Dispatch coding task to CLI agent. Auto-detects mode from content:
-- **Spec mode**: Content starts with `## Spec:` → Two-phase execution: Phase 1 (Test Generation) followed by Phase 2 (Implementation).
-- **Prose mode**: Direct execution for exploratory work, refactors, bug fixes.
+- **SPEC MODE (preferred for features)**: Content starts with `## Spec:` → Triggers two-phase execution:
+  - Phase 1: Generate tests only (fresh context)
+  - Phase 2: Implement against tests (fresh context)
+- **PROSE MODE**: For bug fixes, refactors, exploratory work. Just describe what to do.
 
 **Concurrency & Deduplication:**
 The server uses a `DispatchGuard` to prevent:
-1. **Concurrent Tasks**: Only one task can run per `project_path` at a time.
+1. **Concurrent Tasks**: Only one task can run per `project_path` at a time. Tasks running longer than 10 minutes are automatically failed as stale.
 2. **Duplicate Dispatches**: Identical content hashes are blocked for 5 minutes.
 
-Spec mode is preferred for new features with clear contracts.
+USE SPEC MODE for any non-trivial feature. USE PROSE MODE only for simple fixes.
 
 **Parameters:**
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `content` | string | Yes | Task content. Start with `## Spec:` for spec-driven mode. |
+| `content` | string | Yes | Task content. Start with `## Spec:` for spec-driven mode (preferred for features). |
 | `project_path` | string | Yes | Absolute path to project directory |
 | `cli` | string | No | "claude", "gemini", or "codex" (default: "claude") |
 | `model` | string | No | Model override |
@@ -80,7 +82,7 @@ Spec mode is preferred for new features with clear contracts.
   "mode": "spec",
   "cli": "Claude Code",
   "project_path": "C:\\Projects\\my-api",
-  "message": "Task launched. CLI executing in background. Check back with get_task_result(task_id) - do not dispatch again."
+  "message": "Task launched. DO NOT call get_task_result - wait for user to confirm completion."
 }
 ```
 
@@ -105,7 +107,7 @@ or
 
 ### get_task_result
 
-Get results of completed task.
+Get the result of a dispatched coding task. ONLY call this when user explicitly says the task is done/finished/complete. NEVER call immediately after dispatch.
 
 **Parameters:**
 | Name | Type | Required | Description |

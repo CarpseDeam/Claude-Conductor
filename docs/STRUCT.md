@@ -27,8 +27,8 @@
 - `src\output\masker.py` - Output compression logic
 - `src\mapper\mapper.py` - Source code
 - `src\mapper\git_info.py` - Source code
-- `src\specs\prompts.py` - Source code
-- `src\specs\runner.py` - Spec phase execution logic
+- `src\specs\prompts.py` - Unified spec implementation and test prompts
+- `src\specs\runner.py` - Single-phase spec execution runner
 - `src\specs\validator.py` - Spec validation logic
 - `src\git\operations.py` - Source code
 - `src\mapper\parser.py` - Source code
