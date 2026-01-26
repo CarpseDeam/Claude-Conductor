@@ -1,61 +1,92 @@
-"""Cache for manifests with invalidation on file changes."""
+"""Cache for manifests with fast git-based and time-based validation."""
 
-import hashlib
 import json
 import logging
 import time
 from pathlib import Path
-from typing import Any
 
 from ..manifest import Manifest
 
 
 class ManifestCache:
-    """Caches manifests and invalidates on project changes."""
+    """Caches manifests with fast validation via git HEAD or TTL fallback."""
 
     CACHE_DIR = ".conductor"
     CACHE_FILE = "manifest.json"
-    HASH_FILE = "manifest.hash"
+    META_FILE = "manifest.meta"
+    CACHE_TTL_SECONDS = 300  # 5 minutes
 
     def __init__(self) -> None:
         self.logger = logging.getLogger(self.__class__.__name__)
 
     def get_cached(self, project_path: Path) -> Manifest | None:
-        """Return cached manifest if still valid."""
+        """Return cached manifest if still valid. Fast path: <50ms."""
         start = time.perf_counter()
         cache_dir = project_path / self.CACHE_DIR
         cache_file = cache_dir / self.CACHE_FILE
-        hash_file = cache_dir / self.HASH_FILE
+        meta_file = cache_dir / self.META_FILE
 
-        if not cache_file.exists() or not hash_file.exists():
-            self.logger.debug("Cache miss: files not found (%.3fs)", time.perf_counter() - start)
+        if not cache_file.exists():
+            self.logger.debug("Cache miss: file not found (%.3fs)", time.perf_counter() - start)
+            return None
+
+        if not self._is_cache_valid(project_path, meta_file):
+            self.logger.debug("Cache miss: validation failed (%.3fs)", time.perf_counter() - start)
             return None
 
         try:
-            stored_hash = hash_file.read_text(encoding="utf-8").strip()
-            t0 = time.perf_counter()
-            current_hash = self._compute_hash(project_path)
-            self.logger.debug("Hash computation took %.3fs", time.perf_counter() - t0)
-
-            if stored_hash != current_hash:
-                self.logger.debug("Cache miss: hash mismatch (%.3fs)", time.perf_counter() - start)
-                return None
-
             cache_data = json.loads(cache_file.read_text(encoding="utf-8"))
             manifest = Manifest.from_dict(cache_data)
             self.logger.debug("Cache hit (%.3fs)", time.perf_counter() - start)
             return manifest
-
         except Exception as e:
             self.logger.debug("Cache miss: %s (%.3fs)", e, time.perf_counter() - start)
             return None
 
+    def _is_cache_valid(self, project_path: Path, meta_file: Path) -> bool:
+        """Fast cache validation. Target: <50ms."""
+        if not meta_file.exists():
+            return False
+
+        try:
+            meta = json.loads(meta_file.read_text(encoding="utf-8"))
+
+            git_head = self._get_git_head(project_path)
+            if git_head:
+                return meta.get("git_head") == git_head
+
+            cached_time = meta.get("timestamp", 0)
+            return (time.time() - cached_time) < self.CACHE_TTL_SECONDS
+
+        except Exception:
+            return False
+
+    def _get_git_head(self, project_path: Path) -> str | None:
+        """Get current git HEAD hash. Fast: just reads .git/HEAD."""
+        try:
+            git_dir = project_path / ".git"
+            if not git_dir.exists():
+                return None
+
+            head_file = git_dir / "HEAD"
+            head_content = head_file.read_text(encoding="utf-8").strip()
+
+            if head_content.startswith("ref: "):
+                ref_path = head_content[5:]
+                ref_file = git_dir / ref_path
+                if ref_file.exists():
+                    return ref_file.read_text(encoding="utf-8").strip()[:12]
+            else:
+                return head_content[:12]
+        except Exception:
+            return None
+
     def save(self, project_path: Path, manifest: Manifest) -> None:
-        """Save manifest to cache."""
+        """Save manifest and metadata to cache."""
         start = time.perf_counter()
         cache_dir = project_path / self.CACHE_DIR
         cache_file = cache_dir / self.CACHE_FILE
-        hash_file = cache_dir / self.HASH_FILE
+        meta_file = cache_dir / self.META_FILE
 
         try:
             cache_dir.mkdir(exist_ok=True)
@@ -64,10 +95,11 @@ class ManifestCache:
             cache_data = manifest.to_full_dict()
             cache_file.write_text(json.dumps(cache_data, indent=2), encoding="utf-8")
 
-            t0 = time.perf_counter()
-            current_hash = self._compute_hash(project_path)
-            self.logger.debug("Hash computation for save took %.3fs", time.perf_counter() - t0)
-            hash_file.write_text(current_hash, encoding="utf-8")
+            meta = {
+                "timestamp": time.time(),
+                "git_head": self._get_git_head(project_path),
+            }
+            meta_file.write_text(json.dumps(meta), encoding="utf-8")
 
             self.logger.debug("Cache saved (%.3fs)", time.perf_counter() - start)
 
@@ -78,58 +110,16 @@ class ManifestCache:
         """Invalidate cache for a project."""
         cache_dir = project_path / self.CACHE_DIR
         cache_file = cache_dir / self.CACHE_FILE
-        hash_file = cache_dir / self.HASH_FILE
+        meta_file = cache_dir / self.META_FILE
 
         try:
             if cache_file.exists():
                 cache_file.unlink()
-            if hash_file.exists():
-                hash_file.unlink()
+            if meta_file.exists():
+                meta_file.unlink()
             self.logger.debug("Cache invalidated")
         except Exception as e:
             self.logger.warning("Failed to invalidate cache: %s", e)
-
-    def _compute_hash(self, project_path: Path) -> str:
-        """Compute hash based on file modification times."""
-        hasher = hashlib.sha256()
-        mtimes: list[tuple[str, float]] = []
-
-        for path in self._get_tracked_files(project_path):
-            try:
-                rel_path = str(path.relative_to(project_path))
-                mtime = path.stat().st_mtime
-                mtimes.append((rel_path, mtime))
-            except Exception:
-                continue
-
-        mtimes.sort(key=lambda x: x[0])
-
-        for rel_path, mtime in mtimes:
-            hasher.update(f"{rel_path}:{mtime}".encode())
-
-        return hasher.hexdigest()[:16]
-
-    def _get_tracked_files(self, project_path: Path, limit: int = 500) -> list[Path]:
-        """Get files to track for cache invalidation."""
-        tracked: list[Path] = []
-        skip_dirs = {"__pycache__", ".venv", "venv", "node_modules", ".git", "dist", "build", self.CACHE_DIR}
-
-        stack: list[Path] = [project_path]
-        while stack and len(tracked) < limit:
-            current = stack.pop()
-            try:
-                for item in current.iterdir():
-                    if item.name in skip_dirs:
-                        continue
-                    if item.is_file():
-                        if item.suffix in {".py", ".js", ".ts", ".json", ".toml", ".yaml", ".yml"}:
-                            tracked.append(item)
-                    elif item.is_dir():
-                        stack.append(item)
-            except PermissionError:
-                continue
-
-        return tracked
 
     def _ensure_gitignore(self, cache_dir: Path) -> None:
         """Ensure .conductor is in .gitignore."""
