@@ -6,6 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+- 2026-01-26: feat: implement output compression for spec validation to reduce context bloat
 - 2026-01-26: feat: add `SpecValidationResult` and `validate_spec` for robust specification verification
 - 2026-01-26: feat: enhance spec prompt to prioritize specification accuracy and minimize unnecessary codebase exploration
 - 2026-01-26: feat: unify `launch_claude_code` and `dispatch_with_spec` into a single `dispatch` tool with auto-mode detection

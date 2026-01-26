@@ -9,6 +9,8 @@ import time
 import logging
 from typing import TYPE_CHECKING
 
+from output.masker import mask_output, CommandType
+
 if TYPE_CHECKING:
     from git.contracts import WorkflowResult
 
@@ -66,6 +68,7 @@ class ClaudeOutputWindow:
         self._process = None
         self._stats = self._init_stats()
         self._last_tool_type = None
+        self._last_bash_command: str | None = None
 
         self._root = tk.Tk()
         model_display = self._model.split("-")[-1] if self._model else ""
@@ -278,18 +281,26 @@ class ClaudeOutputWindow:
         tool = data.get("tool_name", "?")
         inp = data.get("input", {})
         self._stats["tools_used"] += 1
+        if tool in ["Bash", "run_shell_command", "Shell"]:
+            self._last_bash_command = inp.get("command", "")
         return self._format_tool_call(tool, inp)
 
     def _handle_gemini_tool_result(self, data: dict) -> list:
         is_error = data.get("is_error", False)
         output = data.get("output", "")
-        max_len = 400 if is_error else 150
+        result_content = output if isinstance(output, str) else str(output)
 
-        if isinstance(output, str):
-            result_content = output[:max_len]
-        else:
-            result_content = str(output)[:max_len]
-        result_content = result_content.replace("\n", " ").strip()
+        cmd_type = self._detect_command_type(self._last_bash_command or "") if self._last_bash_command else None
+        if cmd_type:
+            masked = mask_output(result_content, cmd_type)
+            self._last_bash_command = None
+            if is_error or masked.errors:
+                self._stats["errors"] += 1
+                return [("  [FAILED] ", "error"), (f"{masked.summary}\n", "error")]
+            return [("  [OK] ", "success"), (f"{masked.summary}\n", "muted")]
+
+        max_len = 400 if is_error else 150
+        result_content = result_content[:max_len].replace("\n", " ").strip()
 
         if is_error:
             self._stats["errors"] += 1
@@ -339,9 +350,10 @@ class ClaudeOutputWindow:
             segments.append((f"{filename}\n", "text"))
 
         elif tool in ["Bash", "run_shell_command", "Shell"]:
-            cmd = inp.get("command", "")[:80]
+            cmd = inp.get("command", "")
+            self._last_bash_command = cmd
             segments.append(("[BASH] ", "tool"))
-            segments.append((f"{cmd}\n", "muted"))
+            segments.append((f"{cmd[:80]}\n", "muted"))
 
         elif tool in ["Glob", "Grep", "FindFiles", "SearchText"]:
             pattern = inp.get("pattern", "")[:60]
@@ -374,6 +386,17 @@ class ClaudeOutputWindow:
             return "search"
         return "other"
 
+    def _detect_command_type(self, cmd: str) -> CommandType | None:
+        """Detect if a bash command is a validation command."""
+        cmd_lower = cmd.lower()
+        if "pytest" in cmd_lower:
+            return CommandType.PYTEST
+        elif "mypy" in cmd_lower:
+            return CommandType.MYPY
+        elif any(x in cmd_lower for x in ["ruff", "flake8", "lint"]):
+            return CommandType.LINT
+        return None
+
     def _handle_tool_result(self, data: dict) -> list:
         content = data.get("message", {}).get("content", [])
         segments = []
@@ -381,12 +404,26 @@ class ClaudeOutputWindow:
             if block.get("type") == "tool_result":
                 is_error = block.get("is_error", False)
                 result_content = block.get("content", "")
-                max_len = 400 if is_error else 150
                 if isinstance(result_content, list):
-                    result_content = str(result_content[0].get("text", ""))[:max_len]
+                    result_content = str(result_content[0].get("text", ""))
                 else:
-                    result_content = str(result_content)[:max_len]
-                result_content = result_content.replace("\n", " ").strip()
+                    result_content = str(result_content)
+
+                cmd_type = self._detect_command_type(self._last_bash_command or "") if self._last_bash_command else None
+                if cmd_type:
+                    masked = mask_output(result_content, cmd_type)
+                    self._last_bash_command = None
+                    if is_error or masked.errors:
+                        self._stats["errors"] += 1
+                        segments.append(("  [FAILED] ", "error"))
+                        segments.append((f"{masked.summary}\n", "error"))
+                    else:
+                        segments.append(("  [OK] ", "success"))
+                        segments.append((f"{masked.summary}\n", "muted"))
+                    continue
+
+                max_len = 400 if is_error else 150
+                result_content = result_content[:max_len].replace("\n", " ").strip()
 
                 if is_error:
                     self._stats["errors"] += 1

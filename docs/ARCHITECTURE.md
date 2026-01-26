@@ -58,6 +58,7 @@ Handles executable specification parsing and prompt building:
 - **Validation**: Provides `validate_spec` for non-throwing verification of spec format and requirements.
 - Generates system prompts for TDD-driven implementation
 - **Spec-First Strategy**: Instructs agents to treat the specification as the source of truth, minimizing unnecessary codebase exploration to ensure strict adherence to the defined interface.
+- **Output Compression**: Instructs agents to summarize validation output (test results, linter errors) into compact formats to prevent context bloat during iterative development.
 - Defines validation requirements (tests, lint, typecheck)
 
 ### Git Workflow (`src/git/`)
