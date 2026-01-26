@@ -47,9 +47,17 @@ class PipelineRunner:
 
         cli_cmd = CLI_COMMANDS.get(step.agent, "gemini")
 
-        cmd = f"{cli_cmd} -p"
-        if step.model:
-            cmd += f" -m {step.model}"
+        if step.agent == "gemini":
+            cmd = [cli_cmd, "--approval-mode", "yolo"]
+            if step.model:
+                cmd.extend(["-m", step.model])
+            cmd.append(task)
+            shell = False
+        else:
+            cmd = f"{cli_cmd} -p"
+            if step.model:
+                cmd += f" -m {step.model}"
+            shell = True
 
         logger.info(f"Dispatching pipeline '{step.name}' to {step.agent}")
 
@@ -60,17 +68,27 @@ class PipelineRunner:
             except AttributeError:
                 pass
 
-            process = subprocess.Popen(
-                cmd,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                text=True,
-                cwd=str(self.project_path),
-                shell=True,
-                creationflags=creationflags
-            )
-            process.stdin.write(task)
-            process.stdin.close()
+            if step.agent == "gemini":
+                process = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    cwd=str(self.project_path),
+                    shell=False,
+                    creationflags=creationflags
+                )
+            else:
+                process = subprocess.Popen(
+                    cmd,
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    text=True,
+                    cwd=str(self.project_path),
+                    shell=True,
+                    creationflags=creationflags
+                )
+                process.stdin.write(task)
+                process.stdin.close()
         except Exception as e:
             logger.error(f"Pipeline dispatch failed: {e}")
