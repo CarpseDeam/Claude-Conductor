@@ -22,8 +22,7 @@ mapper/
 ├── mapper.py            # Main mapping logic
 ├── detector.py          # Language and stack detection
 ├── parser.py            # AST-based Python module analysis
-├── git_info.py          # Git history and status extraction
-└── contracts.py         # Data structures
+└── git_info.py          # Git history and status extraction
 ```
 
 The mapper performs deep analysis of Python modules using the `PythonParser`, which leverages the `ast` module to extract:

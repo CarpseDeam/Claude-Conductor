@@ -70,48 +70,35 @@ class ClaudeCodeMCPServer:
                 }
             ),
             Tool(
-                name="launch_claude_code",
+                name="dispatch",
                 description=(
-                    "Launch Claude Code CLI in a visible terminal to execute a coding task. "
-                    "Use this after gathering requirements from the user. "
-                    "CRITICAL: project_path must be the EXACT absolute path to the project being discussed. "
-                    "Do NOT guess - ask the user if unclear which project to work on."
+                    "Dispatch a coding task to CLI agent. Auto-detects mode from content:\n"
+                    "- Spec mode: Content starts with '## Spec:' → expands tests, implements, validates\n"
+                    "- Prose mode: Direct execution for exploratory work, refactors, bug fixes\n"
+                    "Spec mode is preferred for new features with clear contracts."
                 ),
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "task": {
+                        "content": {
                             "type": "string",
-                            "description": "Complete, detailed specification of what to build"
+                            "description": "Task content. Start with '## Spec:' for spec-driven mode."
                         },
                         "project_path": {
                             "type": "string",
-                            "description": "EXACT absolute path to the project directory (e.g. C:\\Projects\\MyProject). Ask user if unsure."
-                        },
-                        "additional_paths": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "description": "Optional additional project paths Claude can read from (e.g. related server/client projects)"
+                            "description": "Absolute path to project directory"
                         },
                         "cli": {
                             "type": "string",
                             "enum": ["claude", "gemini", "codex"],
-                            "description": "Which CLI to use: claude (default), gemini, or codex"
+                            "description": "CLI to use (default: claude)"
                         },
                         "model": {
                             "type": "string",
-                            "description": "Model to use"
-                        },
-                        "git_branch": {
-                            "type": "boolean",
-                            "description": "Create a safety branch before task (default: True)"
-                        },
-                        "godot_project": {
-                            "type": "string",
-                            "description": "Path to Godot project for validation"
+                            "description": "Model to use (optional)"
                         }
                     },
-                    "required": ["task", "project_path"]
+                    "required": ["content", "project_path"]
                 }
             ),
             Tool(
@@ -125,7 +112,7 @@ class ClaudeCodeMCPServer:
                     "properties": {
                         "task_id": {
                             "type": "string",
-                            "description": "Task ID returned from launch_claude_code"
+                            "description": "Task ID returned from dispatch"
                         }
                     },
                     "required": ["task_id"]
@@ -144,39 +131,6 @@ class ClaudeCodeMCPServer:
                     }
                 }
             ),
-            Tool(
-                name="dispatch_with_spec",
-                description=(
-                    "Dispatch a coding task with an executable spec. The CLI agent will: "
-                    "1) Expand the spec into a full pytest test suite, "
-                    "2) Implement until all tests pass, "
-                    "3) Run validation commands. "
-                    "Use compact markdown format with Interface, Must Do, Must Not Do, Edge Cases sections."
-                ),
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "spec_content": {
-                            "type": "string",
-                            "description": "Compact markdown spec content"
-                        },
-                        "project_path": {
-                            "type": "string",
-                            "description": "Absolute path to the project directory"
-                        },
-                        "cli": {
-                            "type": "string",
-                            "enum": ["claude", "gemini", "codex"],
-                            "description": "Which CLI to use (default: claude)"
-                        },
-                        "model": {
-                            "type": "string",
-                            "description": "Model to use (optional)"
-                        }
-                    },
-                    "required": ["spec_content", "project_path"]
-                }
-            ),
         ]
 
     async def _call_tool(self, name: str, arguments: dict) -> list[TextContent]:
@@ -184,14 +138,12 @@ class ClaudeCodeMCPServer:
             return self._handle_get_manifest(arguments)
         elif name == "dispatch_assimilate":
             return self._handle_dispatch_assimilate(arguments)
-        elif name == "launch_claude_code":
-            return self._handle_launch_claude_code(arguments)
+        elif name == "dispatch":
+            return self._handle_dispatch(arguments)
         elif name == "get_task_result":
             return self._handle_get_task_result(arguments)
         elif name == "list_recent_tasks":
             return self._handle_list_recent_tasks(arguments)
-        elif name == "dispatch_with_spec":
-            return self._handle_dispatch_with_spec(arguments)
         else:
             return [TextContent(type="text", text=f"Unknown tool: {name}")]
 
@@ -229,41 +181,46 @@ class ClaudeCodeMCPServer:
             )
         )]
 
-    def _handle_launch_claude_code(self, arguments: dict) -> list[TextContent]:
-        """Handle launch_claude_code tool call."""
+    def _handle_dispatch(self, arguments: dict) -> list[TextContent]:
+        """Handle unified dispatch tool call."""
+        from dispatch import DispatchHandler, DispatchMode
         from tasks.tracker import TaskTracker
 
-        task = arguments["task"]
+        content = arguments["content"]
         project_path = arguments["project_path"]
-        additional_paths = arguments.get("additional_paths", [])
         cli = arguments.get("cli", "claude")
         model = arguments.get("model")
-        godot_project = arguments.get("godot_project")
 
         if not Path(project_path).exists():
             return [TextContent(type="text", text=f"Path does not exist: {project_path}")]
 
+        handler = DispatchHandler()
+        try:
+            request = handler.prepare(content, Path(project_path), cli, model)
+        except ValueError as e:
+            return [TextContent(type="text", text=f"Spec parse error: {e}")]
+
+        full_prompt = handler.build_prompt(request, SYSTEM_PROMPT)
+
         tracker = TaskTracker()
         task_id = tracker.create_task(project_path, cli)
 
-        full_prompt = f"{task}\n\n{SYSTEM_PROMPT}"
+        if request.spec_name:
+            record = tracker.get_task(task_id)
+            if record:
+                record.spec_name = request.spec_name
+                tracker._save(record)
 
-        prompt_file = Path(project_path) / "_claude_prompt.txt"
+        prompt_file = Path(project_path) / "_dispatch_prompt.txt"
         prompt_file.write_text(full_prompt, encoding='utf-8')
 
         viewer_script = Path(__file__).parent / "gui_viewer.py"
-        python_exe = sys.executable
 
-        cmd = [python_exe, str(viewer_script), project_path, str(prompt_file)]
+        cmd = [sys.executable, str(viewer_script), project_path, str(prompt_file)]
         cmd.extend(["--task-id", task_id])
-        for p in additional_paths:
-            if Path(p).exists():
-                cmd.extend(["--add-dir", p])
         cmd.extend(["--cli", cli])
         if model:
             cmd.extend(["--model", model])
-        if godot_project:
-            cmd.extend(["--godot-project", godot_project])
 
         subprocess.Popen(
             cmd,
@@ -277,12 +234,21 @@ class ClaudeCodeMCPServer:
         response = {
             "status": "launched",
             "task_id": task_id,
+            "mode": request.mode.value,
             "cli": cli_names.get(cli, cli),
             "model": model or "default",
             "project_path": project_path,
-            "additional_paths": additional_paths,
-            "message": "GUI window opened with live output. Use get_task_result with task_id when finished!"
         }
+
+        if request.spec_name:
+            response["spec_name"] = request.spec_name
+
+        response["message"] = (
+            "Spec-driven task launched. CLI will expand tests, implement, and validate."
+            if request.mode == DispatchMode.SPEC
+            else "Task launched. CLI executing directly."
+        )
+
         return [TextContent(type="text", text=json.dumps(response, indent=2))]
 
     def _handle_get_task_result(self, arguments: dict) -> list[TextContent]:
@@ -335,74 +301,6 @@ class ClaudeCodeMCPServer:
             })
 
         return [TextContent(type="text", text=json.dumps(tasks, indent=2))]
-
-    def _handle_dispatch_with_spec(self, arguments: dict) -> list[TextContent]:
-        """Handle dispatch_with_spec tool call."""
-        from specs import SpecParser, SpecPromptBuilder
-        from tasks.tracker import TaskTracker
-
-        spec_content = arguments["spec_content"]
-        project_path = arguments["project_path"]
-        cli = arguments.get("cli", "claude")
-        model = arguments.get("model")
-
-        if not Path(project_path).exists():
-            return [TextContent(type="text", text=f"Path does not exist: {project_path}")]
-
-        try:
-            parser = SpecParser()
-            spec = parser.parse(spec_content)
-        except ValueError as e:
-            return [TextContent(type="text", text=f"Spec parse error: {e}")]
-
-        builder = SpecPromptBuilder()
-        full_prompt = builder.build_full_prompt(spec)
-        full_prompt = f"{full_prompt}\n\n{SYSTEM_PROMPT}"
-
-        tracker = TaskTracker()
-        task_id = tracker.create_task(project_path, cli)
-
-        record = tracker.get_task(task_id)
-        if record:
-            record.spec_name = spec.name
-            tracker._save(record)
-
-        prompt_file = Path(project_path) / "_spec_prompt.txt"
-        prompt_file.write_text(full_prompt, encoding='utf-8')
-
-        viewer_script = Path(__file__).parent / "gui_viewer.py"
-
-        cmd = [sys.executable, str(viewer_script), project_path, str(prompt_file)]
-        cmd.extend(["--task-id", task_id])
-        cmd.extend(["--cli", cli])
-        if model:
-            cmd.extend(["--model", model])
-
-        subprocess.Popen(
-            cmd,
-            creationflags=subprocess.CREATE_NO_WINDOW,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            stdin=subprocess.DEVNULL
-        )
-
-        cli_names = {"claude": "Claude Code", "gemini": "Gemini CLI", "codex": "OpenAI Codex"}
-        response = {
-            "status": "launched",
-            "task_id": task_id,
-            "spec_name": spec.name,
-            "spec_tier": spec.tier.value,
-            "cli": cli_names.get(cli, cli),
-            "model": model or "default",
-            "project_path": project_path,
-            "validation": {
-                "tests": spec.validation.tests,
-                "typecheck": spec.validation.typecheck,
-                "lint": spec.validation.lint
-            },
-            "message": "Spec-driven task launched. CLI will expand tests, implement, and validate."
-        }
-        return [TextContent(type="text", text=json.dumps(response, indent=2))]
 
     async def run(self):
         async with stdio_server() as (read_stream, write_stream):

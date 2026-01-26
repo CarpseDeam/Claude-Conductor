@@ -8,6 +8,8 @@ dist/
 build/
 target/
 .env
+_dispatch_prompt.txt
 _claude_prompt.txt
+_spec_prompt.txt
 
 .conductor/
