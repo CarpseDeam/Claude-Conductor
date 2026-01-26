@@ -14,7 +14,7 @@ SYSTEM_PROMPT = (
     "Write clean, scalable, modular, efficient code. "
     "Follow single responsibility principle. Do not repeat yourself. "
     "Use consistent naming conventions. No unnecessary comments.\n\n"
-    "DOCUMENTATION: If CLAUDE.md exists in the project root, update it with your changes. "
+    "DOCUMENTATION: If STRUCT.md exists in the project root, update it with your changes. "
     "If it doesn't exist, create it. Include: project purpose, architecture overview, "
     "key files/components, and a brief changelog of what you just did. Keep it concise."
 )
@@ -183,7 +183,7 @@ class ClaudeCodeMCPServer:
 
         cache = ManifestCache()
         formatter = ManifestFormatter()
-        claude_md_path = project_path / "CLAUDE.md"
+        claude_md_path = project_path / "STRUCT.md"
 
         if not refresh:
             cached = cache.get_cached(project_path)
