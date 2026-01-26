@@ -34,8 +34,7 @@ class ClaudeCodeMCPServer:
                 description=(
                     "Get strategic overview of a codebase. Call this FIRST before coding tasks. "
                     "Returns: project structure, stack detection (language/frameworks/tools), "
-                    "key files with parsed Python content including class names, method signatures, "
-                    "and function signatures. Helps understand where code lives and what interfaces exist. "
+                    "key files with AST-parsed method signatures. Fast (<1s) - no git calls. "
                     "Cached to docs/STRUCT.md; use refresh=true to regenerate after changes."
                 ),
                 inputSchema={

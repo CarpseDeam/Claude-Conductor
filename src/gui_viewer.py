@@ -21,7 +21,7 @@ GODOT_EXE = r"C:\Users\carps\OneDrive\Desktop\Godot.exe"
 
 CLI_CONFIGS = {
     "claude": {
-        "cmd": "claude -p --model opus --output-format stream-json --include-partial-messages --verbose --max-turns 25 --dangerously-skip-permissions",
+        "cmd": "claude -p --permission-mode dontAsk --output-format stream-json --include-partial-messages --verbose --max-turns 25 --dangerously-skip-permissions",
         "add_dir_flag": "--add-dir",
         "model_flag": "--model",
         "title": "Claude Code",
@@ -155,7 +155,16 @@ class ClaudeOutputWindow:
         if self._spec_mode:
             self._run_two_phase()
         else:
-            self._run_single_phase(self._prompt)
+            success = self._run_single_phase(self._prompt)
+            self._root.after(0, self._show_summary)
+            if success:
+                self._root.after(0, lambda: self._set_status("Completed!", "#00ff00"))
+                self._report_task_completion()
+                git_thread = threading.Thread(target=self._auto_git_commit, daemon=True)
+                git_thread.start()
+            else:
+                self._root.after(0, lambda: self._set_status("Failed", "#ff6600"))
+                self._report_task_failure("CLI execution failed")
 
     def _run_single_phase(self, prompt: str) -> bool:
         """Run a single CLI invocation. Returns True on success."""
@@ -209,10 +218,14 @@ class ClaudeOutputWindow:
                     errors='replace'
                 )
 
-            for line in iter(self._process.stdout.readline, ""):
-                segments = self._format_line(line)
-                for text, tag in segments:
-                    self._root.after(0, lambda t=text, g=tag: self._append(t, g))
+            while True:
+                line = self._process.stdout.readline()
+                if not line and self._process.poll() is not None:
+                    break
+                if line:
+                    segments = self._format_line(line)
+                    for text, tag in segments:
+                        self._root.after(0, lambda t=text, g=tag: self._append(t, g))
 
             self._process.wait()
             return self._process.returncode == 0

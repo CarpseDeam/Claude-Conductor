@@ -6,7 +6,7 @@ from .contracts import GitDiff
 class CommitMessageGenerator:
     OLLAMA_URL = "http://localhost:11434/api/generate"
     MODEL = "mistral:latest"
-    TIMEOUT = 30
+    TIMEOUT = 5
 
     SYSTEM_PROMPT = """You are a git commit message generator. Generate a commit message in conventional commit format.
 
@@ -40,12 +40,16 @@ Diff content:
             }
         }
 
-        with httpx.Client(timeout=self.TIMEOUT) as client:
-            response = client.post(self.OLLAMA_URL, json=payload)
-            response.raise_for_status()
-
-        data = response.json()
-        raw_response = data.get("response", "").strip()
+        try:
+            with httpx.Client(timeout=self.TIMEOUT) as client:
+                response = client.post(self.OLLAMA_URL, json=payload)
+                response.raise_for_status()
+            data = response.json()
+            raw_response = data.get("response", "").strip()
+        except Exception:
+            # Fallback if Ollama slow/unavailable
+            files = diff.files_changed[:3]
+            return f"chore: update {', '.join(files)}"
 
         commit_msg = raw_response.split('\n')[0].strip()
         commit_msg = commit_msg.strip('"\'')

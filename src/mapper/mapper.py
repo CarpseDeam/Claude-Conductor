@@ -1,5 +1,4 @@
 """Codebase mapper for generating project context."""
-from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -13,7 +12,7 @@ class FileInfo:
     """Info about a single file."""
     path: str
     purpose: str
-    lines: int
+    lines: int = 0
     module_info: ModuleInfo | None = None
 
 
@@ -22,7 +21,7 @@ class DirectoryInfo:
     """Info about a directory."""
     path: str
     purpose: str
-    file_count: int
+    file_count: int = 0
 
 
 @dataclass
@@ -133,17 +132,6 @@ class CodebaseMapper:
         'htmlcov', '.coverage', 'addons', 'target', 'out', 'bin',
     }
 
-    SKIP_FILES: set[str] = {
-        '.DS_Store', 'Thumbs.db', '.gitignore', '.gitattributes',
-    }
-
-    CODE_EXTENSIONS: set[str] = {
-        '.py', '.js', '.ts', '.tsx', '.jsx', '.gd',
-        '.java', '.go', '.rs', '.rb', '.php', '.cs',
-        '.cpp', '.c', '.h', '.hpp', '.swift', '.kt',
-        '.vue', '.svelte', '.md', '.json', '.yaml', '.toml',
-    }
-
     DIR_PURPOSES: dict[str, str] = {
         'src': 'Source code',
         'lib': 'Library code',
@@ -171,8 +159,7 @@ class CodebaseMapper:
         'autoload': 'Godot autoloads',
     }
 
-    FILE_PURPOSES: dict[str, str] = {
-        '__init__.py': 'Package init',
+    KEY_FILE_PATTERNS: dict[str, str] = {
         'main.py': 'Entry point',
         'app.py': 'Application entry',
         'server.py': 'Server entry',
@@ -185,19 +172,19 @@ class CodebaseMapper:
         'views.py': 'View handlers',
         'services.py': 'Business logic',
         'utils.py': 'Utilities',
-        'helpers.py': 'Helper functions',
         'constants.py': 'Constants',
         'exceptions.py': 'Custom exceptions',
         'types.py': 'Type definitions',
         'contracts.py': 'Data contracts',
-        'conftest.py': 'Test fixtures',
         'pyproject.toml': 'Project config',
         'package.json': 'Package config',
+        'Cargo.toml': 'Project config',
+        'go.mod': 'Project config',
         'README.md': 'Documentation',
         'project.godot': 'Godot project',
     }
 
-    MAX_FILES: int = 1000
+    MAX_SHALLOW_DEPTH: int = 2
     MAX_KEY_FILES: int = 30
 
     def __init__(self, project_path: Path | str) -> None:
@@ -205,58 +192,13 @@ class CodebaseMapper:
         self.detector = StackDetector()
         self.python_parser = PythonParser()
         self.git_extractor = GitInfoExtractor()
-        self._all_files: list[FileInfo] = []
 
     def map(self) -> CodebaseMap:
-        """Generate codebase map. Synchronous, fast."""
+        """Generate codebase map with AST parsing for key files."""
         stack = self.detector.detect(self.project_path)
-
-        directories: list[DirectoryInfo] = []
-        all_files: list[FileInfo] = []
-        total_lines = 0
-        dir_count = 0
-        dir_files: dict[str, list[FileInfo]] = {}
-
-        for item in self._walk():
-            if item.is_dir():
-                dir_count += 1
-            else:
-                rel_path = str(item.relative_to(self.project_path))
-                purpose = self._infer_file_purpose(item)
-                lines = self._count_lines(item)
-                total_lines += lines
-                if item.suffix == '.py':
-                    module_info = self.python_parser.parse(item)
-                    file_info = FileInfo(rel_path, purpose, lines, module_info)
-                else:
-                    file_info = FileInfo(rel_path, purpose, lines)
-                all_files.append(file_info)
-
-                parent_rel = str(item.parent.relative_to(self.project_path))
-                if parent_rel not in dir_files:
-                    dir_files[parent_rel] = []
-                dir_files[parent_rel].append(file_info)
-
-                if len(all_files) >= self.MAX_FILES:
-                    break
-
-        self._all_files = all_files
-
-        for item in self._walk():
-            if item.is_dir():
-                rel_path = str(item.relative_to(self.project_path))
-                file_count = sum(1 for f in item.iterdir() if self._is_code_file(f))
-                files_in_dir = dir_files.get(rel_path, [])
-                purpose = self._infer_dir_purpose_from_contents(item, files_in_dir)
-                if file_count > 0 or purpose != "Project files":
-                    directories.append(DirectoryInfo(rel_path, purpose, file_count))
-
-        dependencies = self._build_dependency_graph(all_files)
-
-        recent_commits = self.git_extractor.get_recent_commits(self.project_path)
-        uncommitted = self.git_extractor.get_uncommitted_changes(self.project_path)
-
-        key_files = self._select_key_files(all_files)
+        directories = self._list_directories_shallow()
+        key_files = self._identify_key_files_fast()
+        key_files = self._enrich_with_ast(key_files)
         entry_points = self._infer_entry_points(stack, directories)
 
         return CodebaseMap(
@@ -266,129 +208,103 @@ class CodebaseMapper:
             key_files=key_files,
             entry_points=entry_points,
             stats={
-                'files': len(all_files),
-                'dirs': dir_count,
-                'lines': total_lines,
+                'files': len(key_files),
+                'dirs': len(directories),
+                'lines': sum(f.lines for f in key_files),
             },
-            dependencies=dependencies,
-            recent_commits=recent_commits,
-            uncommitted=uncommitted,
         )
 
-    def _build_dependency_graph(self, all_files: list[FileInfo]) -> dict[str, list[str]]:
-        """Build dependency graph from parsed modules."""
-        dependencies: dict[str, list[str]] = {}
-        for f in all_files:
-            if f.module_info and f.module_info.imports:
-                internal_imports = [
-                    imp for imp in f.module_info.imports
-                    if self._is_internal_import(imp)
-                ]
-                if internal_imports:
-                    dependencies[f.path] = internal_imports
-        return dependencies
+    def _list_directories_shallow(self) -> list[DirectoryInfo]:
+        """List directories up to MAX_SHALLOW_DEPTH levels deep."""
+        directories: list[DirectoryInfo] = []
 
-    def _is_internal_import(self, module: str) -> bool:
-        """Check if import is from this project."""
-        parts = module.split('.')
-        for f in self._all_files:
-            if any(part in f.path for part in parts):
-                return True
-        return False
-
-    def _infer_dir_purpose_from_contents(self, dir_path: Path, files: list[FileInfo]) -> str:
-        """Infer directory purpose from its files."""
-        name = dir_path.name.lower()
-        if name in self.DIR_PURPOSES:
-            return self.DIR_PURPOSES[name]
-
-        if not files:
-            return "Project files"
-
-        purposes = [f.purpose for f in files]
-        counts = Counter(p for p in purposes if p not in ("Source code", "Package init"))
-        if counts:
-            return counts.most_common(1)[0][0]
-
-        return "Source code"
-
-    def _walk(self):
-        """Walk project directory, yielding files and dirs."""
         try:
-            for item in self.project_path.rglob('*'):
-                if self._should_skip(item):
+            for item in self.project_path.iterdir():
+                if not item.is_dir() or item.name in self.SKIP_DIRS or item.name.startswith('.'):
                     continue
-                yield item
+
+                purpose = self.DIR_PURPOSES.get(item.name.lower(), 'Project files')
+                directories.append(DirectoryInfo(item.name, purpose))
+
+                for sub_item in item.iterdir():
+                    if not sub_item.is_dir() or sub_item.name in self.SKIP_DIRS or sub_item.name.startswith('.'):
+                        continue
+                    rel_path = f"{item.name}/{sub_item.name}"
+                    sub_purpose = self.DIR_PURPOSES.get(sub_item.name.lower(), 'Project files')
+                    directories.append(DirectoryInfo(rel_path, sub_purpose))
         except PermissionError:
             pass
 
-    def _should_skip(self, path: Path) -> bool:
-        """Check if path should be skipped."""
-        for part in path.parts:
-            if part in self.SKIP_DIRS:
-                return True
+        return directories
 
-        if path.is_file():
-            if path.name in self.SKIP_FILES:
-                return True
-            if path.name.startswith('.'):
-                return True
+    def _identify_key_files_fast(self) -> list[FileInfo]:
+        """Find key files by name pattern only. No file reading, no AST."""
+        key_files: list[FileInfo] = []
+        seen_names: set[str] = set()
 
-        return False
+        for name, purpose in self.KEY_FILE_PATTERNS.items():
+            for match in self.project_path.glob(f"**/{name}"):
+                if self._should_skip_path(match):
+                    continue
+                rel_path = str(match.relative_to(self.project_path))
+                if rel_path not in seen_names:
+                    seen_names.add(rel_path)
+                    key_files.append(FileInfo(rel_path, purpose))
+                if len(key_files) >= self.MAX_KEY_FILES:
+                    return key_files
 
-    def _is_code_file(self, path: Path) -> bool:
-        """Check if file is a code file."""
-        return path.is_file() and path.suffix.lower() in self.CODE_EXTENSIONS
+        return key_files
 
-    def _infer_file_purpose(self, path: Path) -> str:
-        """Infer file purpose from name and location."""
-        name = path.name
+    def _should_skip_path(self, path: Path) -> bool:
+        """Check if path contains any skip directories."""
+        return any(part in self.SKIP_DIRS for part in path.parts)
 
-        if name in self.FILE_PURPOSES:
-            return self.FILE_PURPOSES[name]
+    def _enrich_with_ast(self, files: list[FileInfo]) -> list[FileInfo]:
+        """Add AST parsing and line counts to key files."""
+        enriched: list[FileInfo] = []
 
-        stem = path.stem.lower()
-        if stem.startswith('test_') or stem.endswith('_test'):
-            return "Tests"
-        if 'route' in stem or 'endpoint' in stem:
-            return "Route handlers"
-        if 'model' in stem:
-            return "Data models"
-        if 'schema' in stem:
-            return "Data schemas"
-        if 'service' in stem:
-            return "Business logic"
-        if 'util' in stem or 'helper' in stem:
-            return "Utilities"
+        for f in files:
+            full_path = self.project_path / f.path
 
-        parent = path.parent.name.lower()
-        if parent in self.DIR_PURPOSES:
-            return self.DIR_PURPOSES[parent]
+            if full_path.suffix == '.py' and full_path.exists():
+                module_info = self.python_parser.parse(full_path)
+                lines = self._count_lines(full_path)
+                enriched.append(FileInfo(f.path, f.purpose, lines, module_info))
+            elif full_path.exists():
+                lines = self._count_lines(full_path)
+                enriched.append(FileInfo(f.path, f.purpose, lines))
+            else:
+                enriched.append(f)
 
-        return "Source code"
+        return enriched
 
     def _count_lines(self, path: Path) -> int:
-        """Count lines in file. Fast, handles errors."""
+        """Count lines in file."""
         try:
             return sum(1 for _ in path.open('rb'))
         except Exception:
             return 0
 
-    def _select_key_files(self, files: list[FileInfo]) -> list[FileInfo]:
-        """Select most important files for the map."""
-        priority_purposes = {
-            'Entry point', 'Application entry', 'Server entry',
-            'CLI entry', 'Project config', 'Package config',
-            'Configuration', 'Data models', 'Route handlers',
-        }
+    def _build_dependency_graph(self, files: list[FileInfo]) -> dict[str, list[str]]:
+        """Build dependency graph from parsed modules."""
+        all_paths = {f.path for f in files}
+        dependencies: dict[str, list[str]] = {}
 
-        priority_files = [f for f in files if f.purpose in priority_purposes]
-        other_files = [f for f in files if f.purpose not in priority_purposes]
+        for f in files:
+            if f.module_info and f.module_info.imports:
+                internal_imports = [
+                    imp for imp in f.module_info.imports
+                    if self._is_internal_import(imp, all_paths)
+                ]
+                if internal_imports:
+                    dependencies[f.path] = internal_imports
 
-        other_files.sort(key=lambda f: f.lines, reverse=True)
+        return dependencies
 
-        result = priority_files + other_files
-        return result[:self.MAX_KEY_FILES]
+    def _is_internal_import(self, module: str, all_paths: set[str]) -> bool:
+        """Check if import is from this project."""
+        parts = module.split('.')
+        return any(any(part in path for part in parts) for path in all_paths)
 
     def _infer_entry_points(self, stack: StackInfo, directories: list[DirectoryInfo]) -> dict[str, str]:
         """Infer where to add new code."""
