@@ -3,6 +3,7 @@
 import hashlib
 import json
 import logging
+import time
 from pathlib import Path
 from typing import Any
 
@@ -21,30 +22,37 @@ class ManifestCache:
 
     def get_cached(self, project_path: Path) -> Manifest | None:
         """Return cached manifest if still valid."""
+        start = time.perf_counter()
         cache_dir = project_path / self.CACHE_DIR
         cache_file = cache_dir / self.CACHE_FILE
         hash_file = cache_dir / self.HASH_FILE
 
         if not cache_file.exists() or not hash_file.exists():
+            self.logger.debug("Cache miss: files not found (%.3fs)", time.perf_counter() - start)
             return None
 
         try:
             stored_hash = hash_file.read_text(encoding="utf-8").strip()
+            t0 = time.perf_counter()
             current_hash = self._compute_hash(project_path)
+            self.logger.debug("Hash computation took %.3fs", time.perf_counter() - t0)
 
             if stored_hash != current_hash:
-                self.logger.debug("Cache invalidated: hash mismatch")
+                self.logger.debug("Cache miss: hash mismatch (%.3fs)", time.perf_counter() - start)
                 return None
 
             cache_data = json.loads(cache_file.read_text(encoding="utf-8"))
-            return Manifest.from_dict(cache_data)
+            manifest = Manifest.from_dict(cache_data)
+            self.logger.debug("Cache hit (%.3fs)", time.perf_counter() - start)
+            return manifest
 
         except Exception as e:
-            self.logger.debug("Failed to read cache: %s", e)
+            self.logger.debug("Cache miss: %s (%.3fs)", e, time.perf_counter() - start)
             return None
 
     def save(self, project_path: Path, manifest: Manifest) -> None:
         """Save manifest to cache."""
+        start = time.perf_counter()
         cache_dir = project_path / self.CACHE_DIR
         cache_file = cache_dir / self.CACHE_FILE
         hash_file = cache_dir / self.HASH_FILE
@@ -56,10 +64,12 @@ class ManifestCache:
             cache_data = manifest.to_full_dict()
             cache_file.write_text(json.dumps(cache_data, indent=2), encoding="utf-8")
 
+            t0 = time.perf_counter()
             current_hash = self._compute_hash(project_path)
+            self.logger.debug("Hash computation for save took %.3fs", time.perf_counter() - t0)
             hash_file.write_text(current_hash, encoding="utf-8")
 
-            self.logger.debug("Cache saved successfully")
+            self.logger.debug("Cache saved (%.3fs)", time.perf_counter() - start)
 
         except Exception as e:
             self.logger.warning("Failed to save cache: %s", e)

@@ -1,6 +1,7 @@
 """Core orchestrator for codebase assimilation."""
 
 import logging
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
@@ -95,26 +96,36 @@ class Assimilator:
 
     def _quick_assimilate(self) -> Manifest:
         """Fast mode: structure + file list + basic detection. Target: <2 seconds."""
+        start = time.perf_counter()
         self.logger.info("Quick analyzing project: %s", self.project_path)
 
         results: dict[str, Any] = self._init_results()
 
+        t0 = time.perf_counter()
         structure_analyzer = StructureAnalyzer(self.project_path)
         self._merge_results(results, structure_analyzer.safe_analyze())
+        self.logger.debug("StructureAnalyzer took %.3fs", time.perf_counter() - t0)
 
+        t0 = time.perf_counter()
         git_analyzer = GitAnalyzer(self.project_path)
         self._merge_results(results, git_analyzer.safe_analyze())
+        self.logger.debug("GitAnalyzer took %.3fs", time.perf_counter() - t0)
 
+        t0 = time.perf_counter()
         python_analyzer = PythonAnalyzer(self.project_path)
         self._merge_results(results, python_analyzer.safe_analyze())
+        self.logger.debug("PythonAnalyzer took %.3fs", time.perf_counter() - t0)
 
         results["entry_points"] = self._infer_entry_points(results)
 
         manifest = self._build_manifest(results)
 
+        t0 = time.perf_counter()
         if self.use_cache:
             self.cache.save(self.project_path, manifest)
+        self.logger.debug("Cache save took %.3fs", time.perf_counter() - t0)
 
+        self.logger.info("Quick assimilate total: %.3fs", time.perf_counter() - start)
         return manifest
 
     def _full_assimilate(self) -> Manifest:

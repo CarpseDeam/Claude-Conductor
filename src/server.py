@@ -50,7 +50,7 @@ class ClaudeCodeMCPServer:
                         },
                         "quick": {
                             "type": "boolean",
-                            "description": "Fast shallow analysis (default: false). Use for initial exploration."
+                            "description": "Fast shallow analysis (default: true). Set to false for full deep analysis."
                         }
                     },
                     "required": ["project_path"]
@@ -169,7 +169,7 @@ class ClaudeCodeMCPServer:
         """Handle get_manifest tool call."""
         project_path = Path(arguments["project_path"])
         refresh = arguments.get("refresh", False)
-        quick = arguments.get("quick", False)
+        quick = arguments.get("quick", True)
 
         if not project_path.exists():
             return [TextContent(type="text", text=f"Path does not exist: {project_path}")]
@@ -179,7 +179,7 @@ class ClaudeCodeMCPServer:
 
         cache = ManifestCache()
 
-        if not refresh and not quick:
+        if not refresh:
             cached = cache.get_cached(project_path)
             if cached:
                 return [TextContent(type="text", text=json.dumps(cached.to_compressed_dict(), indent=2))]

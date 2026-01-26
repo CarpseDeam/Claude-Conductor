@@ -586,14 +586,15 @@ class ClaudeOutputWindow:
 
     def _run_post_commit_pipelines(self, diff_content: str) -> None:
         """Fire post-commit pipelines. Non-blocking."""
+        self._root.after(0, lambda: self._set_status("📄 Updating docs...", "#FFD700"))
         try:
             from pipelines.runner import PipelineRunner
 
             runner = PipelineRunner(Path(self._project_path))
             runner.run_post_commit(diff_content)
-            logger.info("Post-commit pipelines dispatched")
+            self._root.after(0, lambda: self._set_status("✓ Docs pipeline dispatched", "#00ff00"))
         except Exception as e:
-            logger.warning(f"Post-commit pipeline failed: {e}")
+            self._root.after(0, lambda: self._set_status(f"⚠ Pipeline: {e}", "#FFA500"))
 
     def _on_close(self):
         if self._process and self._process.poll() is None:
