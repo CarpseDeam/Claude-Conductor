@@ -4,31 +4,26 @@ import json
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
-AUTO_DOCS_PROMPT = '''You are a documentation maintainer. Review this git diff and update project documentation.
+AUTO_DOCS_PROMPT = '''You are a documentation maintainer. Review this git diff and update CLAUDE.md in the project root.
 
 DIFF:
 {diff}
 
-DOCUMENTATION FILES:
-- docs/CHANGELOG.md - Change history (ALWAYS update this)
-- docs/ARCHITECTURE.md - System design (update if structure changed)
-- docs/API.md - API reference (update if public interfaces changed)
-- README.md - User-facing docs (update if features/install changed)
+TARGET FILE: CLAUDE.md (project root)
 
 RULES:
-1. ALWAYS add an entry to CHANGELOG.md under [Unreleased]
+1. Add a changelog entry at the top of the "## Changelog" section
    Format: "- type: description" (feat/fix/refactor/docs)
 
-2. If docs are mostly empty/placeholder, flesh them out based on what you
-   can infer from the diff and codebase
+2. Update any outdated component or structure information based on the diff
 
-3. If docs exist, be surgical - only modify what needs updating
+3. Be surgical - only modify sections that need updating
 
 4. Keep tone professional and concise
 
 5. After updating, commit with message: "docs: [brief description]"
 
-If the diff is only documentation changes, you can skip (no recursive doc updates).
+If the diff only touches CLAUDE.md, skip to avoid recursive updates.
 '''
 
 

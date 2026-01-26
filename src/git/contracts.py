@@ -23,4 +23,5 @@ class WorkflowResult:
     merged: bool
     branch_cleaned: bool
     commit_message: str | None
+    diff_content: str | None = None
     errors: list[str] = field(default_factory=list)

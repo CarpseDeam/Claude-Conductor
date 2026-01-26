@@ -13,7 +13,10 @@ from mcp.types import Tool, TextContent
 SYSTEM_PROMPT = (
     "Write clean, scalable, modular, efficient code. "
     "Follow single responsibility principle. Do not repeat yourself. "
-    "Use consistent naming conventions. No unnecessary comments."
+    "Use consistent naming conventions. No unnecessary comments.\n\n"
+    "DOCUMENTATION: If CLAUDE.md exists in the project root, update it with your changes. "
+    "If it doesn't exist, create it. Include: project purpose, architecture overview, "
+    "key files/components, and a brief changelog of what you just did. Keep it concise."
 )
 
 
@@ -176,18 +179,24 @@ class ClaudeCodeMCPServer:
 
         from assimilator.core import Assimilator
         from assimilator.output.cache import ManifestCache
+        from assimilator.output.formatter import ManifestFormatter
 
         cache = ManifestCache()
+        formatter = ManifestFormatter()
+        claude_md_path = project_path / "CLAUDE.md"
 
         if not refresh:
             cached = cache.get_cached(project_path)
-            if cached:
-                return [TextContent(type="text", text=json.dumps(cached.to_compressed_dict(), indent=2))]
+            if cached and claude_md_path.exists():
+                markdown = claude_md_path.read_text(encoding="utf-8")
+                return [TextContent(type="text", text=markdown)]
 
         assimilator = Assimilator(project_path)
         manifest = assimilator.assimilate(force_refresh=refresh, quick=quick)
+        markdown = formatter.to_markdown(manifest)
+        claude_md_path.write_text(markdown, encoding="utf-8")
 
-        return [TextContent(type="text", text=json.dumps(manifest.to_compressed_dict(), indent=2))]
+        return [TextContent(type="text", text=markdown)]
 
     def _handle_dispatch_assimilate(self, arguments: dict) -> list[TextContent]:
         """Handle dispatch_assimilate tool call - spawn background analysis."""

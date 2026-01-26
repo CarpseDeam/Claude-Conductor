@@ -38,6 +38,8 @@ class GitWorkflow:
         commit_message: str | None = None
 
         diff = self.ops.get_diff(self.project_path)
+        diff_content = diff.content if diff.has_changes else None
+        
         if not diff.has_changes:
             return WorkflowResult(
                 committed=False,
@@ -45,6 +47,7 @@ class GitWorkflow:
                 merged=False,
                 branch_cleaned=False,
                 commit_message=None,
+                diff_content=None,
                 errors=["No changes to commit"],
             )
 
@@ -61,6 +64,7 @@ class GitWorkflow:
                 merged=False,
                 branch_cleaned=False,
                 commit_message=None,
+                diff_content=diff_content,
                 errors=errors,
             )
 
@@ -75,6 +79,7 @@ class GitWorkflow:
                 merged=False,
                 branch_cleaned=False,
                 commit_message=None,
+                diff_content=diff_content,
                 errors=errors,
             )
 
@@ -87,6 +92,7 @@ class GitWorkflow:
                 merged=False,
                 branch_cleaned=False,
                 commit_message=commit_message,
+                diff_content=diff_content,
                 errors=errors,
             )
         committed = True
@@ -100,6 +106,7 @@ class GitWorkflow:
                 merged=False,
                 branch_cleaned=False,
                 commit_message=commit_message,
+                diff_content=diff_content,
                 errors=info,
             )
 
@@ -145,5 +152,6 @@ class GitWorkflow:
             merged=merged,
             branch_cleaned=branch_cleaned,
             commit_message=commit_message,
+            diff_content=diff_content,
             errors=errors,
         )
