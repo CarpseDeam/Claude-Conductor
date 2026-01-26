@@ -166,34 +166,26 @@ class ClaudeCodeMCPServer:
             return [TextContent(type="text", text=f"Unknown tool: {name}")]
 
     def _handle_get_manifest(self, arguments: dict) -> list[TextContent]:
-        """Handle get_manifest tool call."""
         project_path = Path(arguments["project_path"])
         refresh = arguments.get("refresh", False)
-        quick = arguments.get("quick", True)
 
         if not project_path.exists():
             return [TextContent(type="text", text=f"Path does not exist: {project_path}")]
 
+        struct_md = project_path / "docs" / "STRUCT.md"
+
+        if struct_md.exists() and not refresh:
+            return [TextContent(type="text", text=struct_md.read_text(encoding="utf-8"))]
+
         from assimilator.core import Assimilator
-        from assimilator.output.cache import ManifestCache
         from assimilator.output.formatter import ManifestFormatter
 
-        cache = ManifestCache()
-        formatter = ManifestFormatter()
-        docs_dir = project_path / "docs"
-        struct_md_path = docs_dir / "STRUCT.md"
-
-        if not refresh:
-            cached = cache.get_cached(project_path)
-            if cached and struct_md_path.exists():
-                markdown = struct_md_path.read_text(encoding="utf-8")
-                return [TextContent(type="text", text=markdown)]
+        (project_path / "docs").mkdir(exist_ok=True)
 
         assimilator = Assimilator(project_path)
-        manifest = assimilator.assimilate(force_refresh=refresh, quick=quick)
-        markdown = formatter.to_markdown(manifest)
-        docs_dir.mkdir(exist_ok=True)
-        struct_md_path.write_text(markdown, encoding="utf-8")
+        manifest = assimilator.assimilate(force_refresh=True, quick=arguments.get("quick", True))
+        markdown = ManifestFormatter().to_markdown(manifest)
+        struct_md.write_text(markdown, encoding="utf-8")
 
         return [TextContent(type="text", text=markdown)]
 
