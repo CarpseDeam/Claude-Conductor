@@ -135,7 +135,7 @@ _Stack and pattern detection from project files._
 ### `src\tasks\tracker.py`
 _Task tracking for dispatched coding tasks._
 
-**TaskTracker**: `create_task(self, project_path: str, cli: str) -> str, complete_task(self, task_id: str, files_modified: list[str], summary: str) -> None, fail_task(self, task_id: str, error: str) -> None, get_task(self, task_id: str) -> TaskRecord | None, get_recent_tasks(self, limit: int) -> list[TaskRecord]`
+**TaskTracker**: `create_task(self, project_path: str, cli: str) -> str, complete_task(self, task_id: str, files_modified: list[str], summary: str, cli_output: str | None = None) -> None, fail_task(self, task_id: str, error: str) -> None, get_task(self, task_id: str) -> TaskRecord | None, get_recent_tasks(self, limit: int) -> list[TaskRecord]`
 
 ### `_claude_runner.py`
 

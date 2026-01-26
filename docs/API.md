@@ -43,16 +43,6 @@ _Data models for the user service._
 - `src/main.py` -> src.models, src.utils
 - `src/models.py` -> pydantic
 
-## Uncommitted Changes
-- `src/main.py`
-- `tests/test_api.py`
-
-## Recent Changes
-- **a1b2c3d**: feat: add user authentication
-  Files: src/models.py, src/auth.py
-- **e5f6g7h**: fix: resolve database connection leak
-  Files: src/db.py
-
 ## Stats
 - Files: 17
 - Directories: 3
@@ -107,7 +97,8 @@ Get results of completed task.
   "status": "completed",
   "duration_seconds": 180,
   "files_modified": ["src/auth.py", "tests/test_auth.py"],
-  "summary": "Added password reset with email verification"
+  "summary": "Added password reset with email verification",
+  "cli_output": "... full agent output ..."
 }
 ```
 
