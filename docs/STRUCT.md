@@ -6,12 +6,12 @@
 
 - `docs/` - Documentation (4 files)
 - `src/` - Source code (3 files)
-- `src\dispatch/` - Task dispatch logic (3 files)
+- `src\dispatch/` - Task dispatch logic (2 files)
 - `src\git/` - Project files (5 files)
 - `src\mapper/` - Project files (5 files)
 - `src\output/` - Output compression (2 files)
 - `src\pipelines/` - Project files (4 files)
-- `src\specs/` - Project files (4 files)
+- `src\specs/` - Project files (5 files)
 - `src\tasks/` - Project files (3 files)
 
 ## Key Files

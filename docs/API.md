@@ -63,6 +63,8 @@ Dispatch coding task to CLI agent. Auto-detects mode from content:
 - **Spec mode**: Content starts with `## Spec:` → expands tests, implements, validates.
 - **Prose mode**: Direct execution for exploratory work, refactors, bug fixes.
 
+Spec mode is preferred for new features with clear contracts.
+
 **Parameters:**
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
