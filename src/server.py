@@ -1,4 +1,6 @@
 import sys
+import time
+from hashlib import md5
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -8,6 +10,53 @@ import subprocess
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
+
+from tasks.tracker import TaskTracker
+from tasks.contracts import TaskStatus
+
+
+class DispatchGuard:
+    """Guards against duplicate and concurrent dispatches."""
+
+    DEDUP_WINDOW = 300  # 5 minutes
+
+    def __init__(self) -> None:
+        self._recent_dispatches: dict[str, tuple[str, float]] = {}
+
+    def check_running_task(self, project_path: str, tracker: TaskTracker) -> dict | None:
+        """Return blocking response if a task is already running for this project."""
+        for task in tracker.get_recent_tasks(10):
+            if task.project_path == project_path and task.status == TaskStatus.RUNNING:
+                return {
+                    "status": "already_running",
+                    "task_id": task.task_id,
+                    "message": "Task already running for this project. Use get_task_result to check status."
+                }
+        return None
+
+    def check_duplicate(self, content: str) -> dict | None:
+        """Return blocking response if same content was recently dispatched."""
+        content_hash = md5(content.encode()).hexdigest()[:12]
+        now = time.time()
+
+        self._recent_dispatches = {
+            k: v for k, v in self._recent_dispatches.items()
+            if now - v[1] < self.DEDUP_WINDOW
+        }
+
+        if content_hash in self._recent_dispatches:
+            existing_id, _ = self._recent_dispatches[content_hash]
+            return {
+                "status": "duplicate",
+                "task_id": existing_id,
+                "message": "Same task already dispatched. Use get_task_result to check status."
+            }
+        return None
+
+    def record_dispatch(self, content: str, task_id: str) -> None:
+        """Record a dispatch for future deduplication."""
+        content_hash = md5(content.encode()).hexdigest()[:12]
+        self._recent_dispatches[content_hash] = (task_id, time.time())
 
 
 SYSTEM_PROMPT = (
@@ -21,6 +70,7 @@ class ClaudeCodeMCPServer:
 
     def __init__(self):
         self._server = Server("claude-code-bridge")
+        self._dispatch_guard = DispatchGuard()
         self._register_handlers()
 
     def _register_handlers(self):
@@ -189,8 +239,10 @@ class ClaudeCodeMCPServer:
 - Tools: {tools}
 
 ## Code Standards
-- Max file size: 200 lines
-- Max function size: 25 lines
+- New files: aim 200-300 lines, split at 400
+- Existing files: don't refactor unless >500 lines
+- Working god files: leave alone (one responsibility > line count)
+- Max function size: 25 lines (40+ ok if one clear purpose)
 - Full type hints required
 - Use dataclasses/pydantic for structured data
 - pathlib over os.path
@@ -216,7 +268,6 @@ class ClaudeCodeMCPServer:
     def _handle_dispatch(self, arguments: dict) -> list[TextContent]:
         """Handle unified dispatch tool call."""
         from dispatch import DispatchHandler, DispatchMode
-        from tasks.tracker import TaskTracker
 
         content = arguments["content"]
         project_path = arguments["project_path"]
@@ -226,6 +277,14 @@ class ClaudeCodeMCPServer:
         if not Path(project_path).exists():
             return [TextContent(type="text", text=f"Path does not exist: {project_path}")]
 
+        tracker = TaskTracker()
+
+        if blocking := self._dispatch_guard.check_running_task(project_path, tracker):
+            return [TextContent(type="text", text=json.dumps(blocking, indent=2))]
+
+        if blocking := self._dispatch_guard.check_duplicate(content):
+            return [TextContent(type="text", text=json.dumps(blocking, indent=2))]
+
         handler = DispatchHandler()
         try:
             request = handler.prepare(content, Path(project_path), cli, model)
@@ -234,8 +293,8 @@ class ClaudeCodeMCPServer:
 
         full_prompt = handler.build_prompt(request, SYSTEM_PROMPT)
 
-        tracker = TaskTracker()
         task_id = tracker.create_task(project_path, cli)
+        self._dispatch_guard.record_dispatch(content, task_id)
 
         if request.spec_name:
             record = tracker.get_task(task_id)
@@ -287,17 +346,13 @@ class ClaudeCodeMCPServer:
             response["spec_name"] = request.spec_name
 
         response["message"] = (
-            "Spec-driven task launched. CLI will expand tests, implement, and validate."
-            if request.mode == DispatchMode.SPEC
-            else "Task launched. CLI executing directly."
+            "Task launched. CLI executing in background. Check back with get_task_result(task_id) - do not dispatch again."
         )
 
         return [TextContent(type="text", text=json.dumps(response, indent=2))]
 
     def _handle_get_task_result(self, arguments: dict) -> list[TextContent]:
         """Handle get_task_result tool call."""
-        from tasks.tracker import TaskTracker
-
         task_id = arguments["task_id"]
         tracker = TaskTracker()
         record = tracker.get_task(task_id)
@@ -324,8 +379,6 @@ class ClaudeCodeMCPServer:
 
     def _handle_list_recent_tasks(self, arguments: dict) -> list[TextContent]:
         """Handle list_recent_tasks tool call."""
-        from tasks.tracker import TaskTracker
-
         limit = arguments.get("limit", 5)
         tracker = TaskTracker()
         records = tracker.get_recent_tasks(limit)
