@@ -33,9 +33,7 @@ class ClaudeCodeMCPServer:
                 name="get_manifest",
                 description=(
                     "Get strategic overview of a codebase. Call this FIRST before coding tasks. "
-                    "Returns compressed project knowledge (~1-2K tokens). Cached after first run. "
-                    "For large/unknown projects, use quick=true for fast initial scan, or "
-                    "dispatch_assimilate for background full analysis."
+                    "Returns compressed project knowledge (~1-2K tokens). Cached after first run."
                 ),
                 inputSchema={
                     "type": "object",
@@ -47,10 +45,6 @@ class ClaudeCodeMCPServer:
                         "refresh": {
                             "type": "boolean",
                             "description": "Force rebuild manifest, ignore cache (default: false)"
-                        },
-                        "quick": {
-                            "type": "boolean",
-                            "description": "Fast shallow analysis (default: true). Set to false for full deep analysis."
                         }
                     },
                     "required": ["project_path"]
@@ -59,9 +53,7 @@ class ClaudeCodeMCPServer:
             Tool(
                 name="dispatch_assimilate",
                 description=(
-                    "Dispatch background codebase analysis. Returns immediately. "
-                    "Use for large projects where get_manifest would be slow. "
-                    "Check status with get_task_result or just call get_manifest after completion."
+                    "[DEPRECATED] Use get_manifest instead - it's now fast enough for synchronous use."
                 ),
                 inputSchema={
                     "type": "object",
@@ -201,6 +193,9 @@ class ClaudeCodeMCPServer:
             return [TextContent(type="text", text=f"Unknown tool: {name}")]
 
     def _handle_get_manifest(self, arguments: dict) -> list[TextContent]:
+        """Handle get_manifest tool call."""
+        from mapper import CodebaseMapper
+
         project_path = Path(arguments["project_path"])
         refresh = arguments.get("refresh", False)
 
@@ -212,46 +207,24 @@ class ClaudeCodeMCPServer:
         if struct_md.exists() and not refresh:
             return [TextContent(type="text", text=struct_md.read_text(encoding="utf-8"))]
 
-        from assimilator.core import Assimilator
-        from assimilator.output.formatter import ManifestFormatter
+        mapper = CodebaseMapper(project_path)
+        codebase_map = mapper.map()
+        markdown = codebase_map.to_markdown()
 
         (project_path / "docs").mkdir(exist_ok=True)
-
-        assimilator = Assimilator(project_path)
-        manifest = assimilator.assimilate(force_refresh=True, quick=arguments.get("quick", True))
-        markdown = ManifestFormatter().to_markdown(manifest)
         struct_md.write_text(markdown, encoding="utf-8")
 
         return [TextContent(type="text", text=markdown)]
 
     def _handle_dispatch_assimilate(self, arguments: dict) -> list[TextContent]:
-        """Handle dispatch_assimilate tool call - spawn background analysis."""
-        project_path = Path(arguments["project_path"])
-
-        if not project_path.exists():
-            return [TextContent(type="text", text=f"Path does not exist: {project_path}")]
-
-        from tasks.tracker import TaskTracker
-
-        tracker = TaskTracker()
-        task_id = tracker.create_task(str(project_path), cli="assimilator")
-
-        script = Path(__file__).parent / "assimilator_runner.py"
-
-        subprocess.Popen(
-            [sys.executable, str(script), str(project_path), task_id],
-            creationflags=subprocess.CREATE_NO_WINDOW,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            stdin=subprocess.DEVNULL,
-        )
-
-        response = {
-            "status": "dispatched",
-            "task_id": task_id,
-            "message": "Assimilation running in background. Call get_manifest(project_path) when ready."
-        }
-        return [TextContent(type="text", text=json.dumps(response, indent=2))]
+        """Handle dispatch_assimilate tool call - deprecated."""
+        return [TextContent(
+            type="text",
+            text=(
+                "dispatch_assimilate is deprecated. "
+                "Use get_manifest instead - it's now fast enough (<2s) for synchronous use."
+            )
+        )]
 
     def _handle_launch_claude_code(self, arguments: dict) -> list[TextContent]:
         """Handle launch_claude_code tool call."""
