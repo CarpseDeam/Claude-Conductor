@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+- 2026-01-26: refactor: optimize `CodebaseMapper` for high performance (<1s) using shallow walks and fast key-file identification
+- 2026-01-26: feat: improve GUI task lifecycle with status reporting, summary display, and automatic git commit on success
+- 2026-01-26: refactor: update `claude` CLI command to use `--permission-mode dontAsk`
+- 2026-01-26: fix: add fallback mechanism and 5s timeout to commit message generator for better resilience
 - 2026-01-26: refactor: remove legacy TwoPhaseSpecDispatch in favor of modular SpecPhaseRunner
 - 2026-01-26: feat: implement two-phase spec execution (test generation then implementation)
 - 2026-01-26: feat: add `.claude/steering.md` generation with project standards and stack info

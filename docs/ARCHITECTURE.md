@@ -15,26 +15,22 @@ Stdio-based MCP server exposing tools to Claude Desktop:
 
 ### Codebase Mapper (`src/mapper/`)
 
-Generates compressed project manifests for Desktop context efficiency. Optimized for synchronous execution (<2s). Also generates `.claude/steering.md` to provide coding agents with project-specific standards and stack information.
+Generates compressed project manifests for Desktop context efficiency. Optimized for high-speed synchronous execution (<1s) by using a shallow directory walk (depth=2) and identifying key files by name patterns before performing AST enrichment.
 
 ```
 mapper/
-├── mapper.py            # Main mapping logic
+├── mapper.py            # Main mapping logic (shallow walk + key files)
 ├── detector.py          # Language and stack detection
 ├── parser.py            # AST-based Python module analysis
-└── git_info.py          # Git history and status extraction
+└── git_info.py          # Git history extraction (utility)
 ```
 
-The mapper performs deep analysis of Python modules using the `PythonParser`, which leverages the `ast` module to extract:
-- **Module-level docstrings** for high-level purpose identification.
-- **Class structures**, including inheritance and public methods.
+The mapper extracts high-level metadata from key Python modules:
+- **Module-level docstrings** for purpose identification.
+- **Class structures** and **Method signatures**.
 - **Function signatures** with type hints.
-- **Key imports** to understand internal dependencies.
 
-It also integrates Git context via `GitInfoExtractor` to provide:
-- **Recent commit history** with lists of modified files.
-- **Uncommitted changes** to identify work-in-progress.
-
+To maintain sub-second latency, Git context (history/uncommitted changes) is excluded from the default mapping flow.
 
 ### GUI Viewer (`src/gui_viewer.py`)
 
@@ -42,7 +38,7 @@ Real-time streaming output window:
 - Parses stream-json from CLI agents
 - Color-coded tool calls (READ=cyan, EDIT=gold, BASH=gold)
 - Summary panel with stats
-- Auto git commit on completion
+- **Task Lifecycle**: Reports completion to Task Tracker and triggers automatic Git commit on success.
 
 ### Task Tracker (`src/tasks/`)
 

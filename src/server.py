@@ -318,6 +318,7 @@ class ClaudeCodeMCPServer:
             "files_modified": record.files_modified,
             "summary": record.summary,
             "error": record.error,
+            "cli_output": record.cli_output,
         }
         return [TextContent(type="text", text=json.dumps(result, indent=2))]
 

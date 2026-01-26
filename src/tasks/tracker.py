@@ -29,7 +29,7 @@ class TaskTracker:
         self._save(record)
         return task_id
 
-    def complete_task(self, task_id: str, files_modified: list[str], summary: str) -> None:
+    def complete_task(self, task_id: str, files_modified: list[str], summary: str, cli_output: str | None = None) -> None:
         """Mark task as completed with results."""
         record = self.get_task(task_id)
         if not record:
@@ -38,6 +38,7 @@ class TaskTracker:
         record.completed_at = datetime.now()
         record.files_modified = files_modified
         record.summary = summary
+        record.cli_output = cli_output
         self._save(record)
 
     def fail_task(self, task_id: str, error: str) -> None:

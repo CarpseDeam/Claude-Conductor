@@ -133,7 +133,8 @@ class ClaudeOutputWindow:
             "files_written": [],
             "tools_used": 0,
             "errors": 0,
-            "start_time": time.time()
+            "start_time": time.time(),
+            "cli_output": [],
         }
 
     def _configure_tags(self):
@@ -226,6 +227,8 @@ class ClaudeOutputWindow:
                     segments = self._format_line(line)
                     for text, tag in segments:
                         self._root.after(0, lambda t=text, g=tag: self._append(t, g))
+                        if tag == "text" and text.strip():
+                            self._stats["cli_output"].append(text)
 
             self._process.wait()
             return self._process.returncode == 0
@@ -630,7 +633,8 @@ class ClaudeOutputWindow:
             tracker = TaskTracker()
             files_modified = self._stats.get("files_written", [])
             summary = self._build_summary()
-            tracker.complete_task(self._task_id, files_modified, summary)
+            cli_output = "".join(self._stats.get("cli_output", []))[-4000:]
+            tracker.complete_task(self._task_id, files_modified, summary, cli_output)
         except Exception as e:
             logger.warning(f"Failed to report task completion: {e}")
 

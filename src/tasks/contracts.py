@@ -25,6 +25,7 @@ class TaskRecord:
     summary: str | None = None
     error: str | None = None
     spec_name: str | None = None
+    cli_output: str | None = None
 
     def to_dict(self) -> dict:
         """Serialize to dictionary for JSON storage."""
@@ -39,6 +40,7 @@ class TaskRecord:
             "summary": self.summary,
             "error": self.error,
             "spec_name": self.spec_name,
+            "cli_output": self.cli_output,
         }
 
     @classmethod
@@ -55,4 +57,5 @@ class TaskRecord:
             summary=data.get("summary"),
             error=data.get("error"),
             spec_name=data.get("spec_name"),
+            cli_output=data.get("cli_output"),
         )
