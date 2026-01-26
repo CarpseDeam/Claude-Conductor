@@ -149,6 +149,39 @@ class ClaudeCodeMCPServer:
                     }
                 }
             ),
+            Tool(
+                name="dispatch_with_spec",
+                description=(
+                    "Dispatch a coding task with an executable spec. The CLI agent will: "
+                    "1) Expand the spec into a full pytest test suite, "
+                    "2) Implement until all tests pass, "
+                    "3) Run validation commands. "
+                    "Use compact markdown format with Interface, Must Do, Must Not Do, Edge Cases sections."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "spec_content": {
+                            "type": "string",
+                            "description": "Compact markdown spec content"
+                        },
+                        "project_path": {
+                            "type": "string",
+                            "description": "Absolute path to the project directory"
+                        },
+                        "cli": {
+                            "type": "string",
+                            "enum": ["claude", "gemini", "codex"],
+                            "description": "Which CLI to use (default: claude)"
+                        },
+                        "model": {
+                            "type": "string",
+                            "description": "Model to use (optional)"
+                        }
+                    },
+                    "required": ["spec_content", "project_path"]
+                }
+            ),
         ]
 
     async def _call_tool(self, name: str, arguments: dict) -> list[TextContent]:
@@ -162,6 +195,8 @@ class ClaudeCodeMCPServer:
             return self._handle_get_task_result(arguments)
         elif name == "list_recent_tasks":
             return self._handle_list_recent_tasks(arguments)
+        elif name == "dispatch_with_spec":
+            return self._handle_dispatch_with_spec(arguments)
         else:
             return [TextContent(type="text", text=f"Unknown tool: {name}")]
 
@@ -324,6 +359,74 @@ class ClaudeCodeMCPServer:
             })
 
         return [TextContent(type="text", text=json.dumps(tasks, indent=2))]
+
+    def _handle_dispatch_with_spec(self, arguments: dict) -> list[TextContent]:
+        """Handle dispatch_with_spec tool call."""
+        from specs import SpecParser, SpecPromptBuilder
+        from tasks.tracker import TaskTracker
+
+        spec_content = arguments["spec_content"]
+        project_path = arguments["project_path"]
+        cli = arguments.get("cli", "claude")
+        model = arguments.get("model")
+
+        if not Path(project_path).exists():
+            return [TextContent(type="text", text=f"Path does not exist: {project_path}")]
+
+        try:
+            parser = SpecParser()
+            spec = parser.parse(spec_content)
+        except ValueError as e:
+            return [TextContent(type="text", text=f"Spec parse error: {e}")]
+
+        builder = SpecPromptBuilder()
+        full_prompt = builder.build_full_prompt(spec)
+        full_prompt = f"{full_prompt}\n\n{SYSTEM_PROMPT}"
+
+        tracker = TaskTracker()
+        task_id = tracker.create_task(project_path, cli)
+
+        record = tracker.get_task(task_id)
+        if record:
+            record.spec_name = spec.name
+            tracker._save(record)
+
+        prompt_file = Path(project_path) / "_spec_prompt.txt"
+        prompt_file.write_text(full_prompt, encoding='utf-8')
+
+        viewer_script = Path(__file__).parent / "gui_viewer.py"
+
+        cmd = [sys.executable, str(viewer_script), project_path, str(prompt_file)]
+        cmd.extend(["--task-id", task_id])
+        cmd.extend(["--cli", cli])
+        if model:
+            cmd.extend(["--model", model])
+
+        subprocess.Popen(
+            cmd,
+            creationflags=subprocess.CREATE_NO_WINDOW,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL
+        )
+
+        cli_names = {"claude": "Claude Code", "gemini": "Gemini CLI", "codex": "OpenAI Codex"}
+        response = {
+            "status": "launched",
+            "task_id": task_id,
+            "spec_name": spec.name,
+            "spec_tier": spec.tier.value,
+            "cli": cli_names.get(cli, cli),
+            "model": model or "default",
+            "project_path": project_path,
+            "validation": {
+                "tests": spec.validation.tests,
+                "typecheck": spec.validation.typecheck,
+                "lint": spec.validation.lint
+            },
+            "message": "Spec-driven task launched. CLI will expand tests, implement, and validate."
+        }
+        return [TextContent(type="text", text=json.dumps(response, indent=2))]
 
     async def run(self):
         async with stdio_server() as (read_stream, write_stream):

@@ -24,6 +24,7 @@ class TaskRecord:
     files_modified: list[str] = field(default_factory=list)
     summary: str | None = None
     error: str | None = None
+    spec_name: str | None = None
 
     def to_dict(self) -> dict:
         """Serialize to dictionary for JSON storage."""
@@ -37,6 +38,7 @@ class TaskRecord:
             "files_modified": self.files_modified,
             "summary": self.summary,
             "error": self.error,
+            "spec_name": self.spec_name,
         }
 
     @classmethod
@@ -52,4 +54,5 @@ class TaskRecord:
             files_modified=data.get("files_modified", []),
             summary=data.get("summary"),
             error=data.get("error"),
+            spec_name=data.get("spec_name"),
         )
