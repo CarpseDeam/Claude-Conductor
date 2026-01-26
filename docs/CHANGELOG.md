@@ -6,6 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+- 2026-01-26: feat: implement two-phase spec execution (test generation then implementation)
 - 2026-01-26: feat: add `.claude/steering.md` generation with project standards and stack info
 - 2026-01-26: feat: implement CIRCUIT BREAKER in spec prompts to prevent excessive codebase exploration
 - 2026-01-26: refactor: use relative imports in `src/output`

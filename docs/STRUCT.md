@@ -12,7 +12,7 @@
 - `src\mapper/` - Project files (5 files)
 - `src\output/` - Output compression (2 files)
 - `src\pipelines/` - Project files (4 files)
-- `src\specs/` - Project files (5 files)
+- `src\specs/` - Project files (6 files)
 - `src\tasks/` - Project files (3 files)
 
 ## Key Files
@@ -26,6 +26,7 @@
 - `src\mapper\mapper.py` - Source code
 - `src\mapper\git_info.py` - Source code
 - `src\specs\prompts.py` - Source code
+- `src\specs\runner.py` - Spec phase execution logic
 - `src\specs\validator.py` - Spec validation logic
 - `src\git\operations.py` - Source code
 - `src\mapper\parser.py` - Source code
@@ -67,7 +68,7 @@ _Pipeline configuration management._
 ### `src\dispatch\handler.py`
 _Unified task dispatch handling with mode detection._
 
-**DispatchHandler**: `prepare(self, content: str, project_path: Path, cli: str, model: str | None) -> DispatchRequest, build_prompt(self, request: DispatchRequest, system_prompt: str) -> str`
+**DispatchHandler**: `prepare(self, content: str, project_path: Path, cli: str, model: str | None) -> DispatchRequest, build_prompt(self, request: DispatchRequest, system_prompt: str) -> str, build_phase2_prompt(self, request: DispatchRequest, test_path: str, system_prompt: str) -> str | None, get_test_path(self, request: DispatchRequest) -> str | None`
 
 ### `src\mapper\mapper.py`
 _Main codebase mapping logic._
@@ -84,7 +85,12 @@ _Git history and status extraction._
 ### `src\specs\prompts.py`
 _Prompt templates for spec-driven development._
 
-**SpecPromptBuilder**: `build_full_prompt(self, spec: SpecDocument) -> str`
+**SpecPromptBuilder**: `build_phase1_prompt(self, spec: SpecDocument) -> str, build_phase2_prompt(self, spec: SpecDocument, test_path: str) -> str`
+
+### `src\specs\runner.py`
+_Orchestrates two-phase spec execution (test generation then implementation)._
+
+**SpecPhaseRunner**: `get_phase1_request(self) -> PhaseRequest, complete_phase1(self, success: bool, test_path: str) -> None, get_phase2_request(self) -> PhaseRequest | None, infer_test_path(self) -> str`
 
 ### `src\git\operations.py`
 **GitOperations**: `get_diff(self, project_path: Path) -> GitDiff, stage_all(self, project_path: Path) -> bool, commit(self, project_path: Path, message: str) -> CommitResult, push(self, project_path: Path, branch: str | None) -> bool, get_current_branch(self, project_path: Path) -> str | None`

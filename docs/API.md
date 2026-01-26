@@ -64,7 +64,7 @@ _Data models for the user service._
 ### dispatch
 
 Dispatch coding task to CLI agent. Auto-detects mode from content:
-- **Spec mode**: Content starts with `## Spec:` → expands tests, implements, validates.
+- **Spec mode**: Content starts with `## Spec:` → Two-phase execution: Phase 1 (Test Generation) followed by Phase 2 (Implementation).
 - **Prose mode**: Direct execution for exploratory work, refactors, bug fixes.
 
 Spec mode is preferred for new features with clear contracts.
