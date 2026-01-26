@@ -14,6 +14,8 @@
 - `src\pipelines/` - Project files (4 files)
 - `src\specs/` - Project files (6 files)
 - `src\tasks/` - Project files (3 files)
+- `src\utils/` - Utility functions (2 files)
+- `tests/` - Test suite (5 files)
 
 ## Key Files
 
@@ -177,6 +179,6 @@ _Task tracking module._
 
 ## Stats
 
-- Files: 35
-- Directories: 8
-- Lines: 3835
+- Files: 42
+- Directories: 12
+- Lines: 3950
