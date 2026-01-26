@@ -9,6 +9,7 @@
 - `src\dispatch/` - Task dispatch logic (3 files)
 - `src\git/` - Project files (5 files)
 - `src\mapper/` - Project files (5 files)
+- `src\output/` - Output compression (2 files)
 - `src\pipelines/` - Project files (4 files)
 - `src\specs/` - Project files (4 files)
 - `src\tasks/` - Project files (3 files)
@@ -19,6 +20,7 @@
 - `src\server.py` - Server entry
 - `src\pipelines\config.py` - Configuration
 - `src\gui_viewer.py` - Source code
+- `src\output\masker.py` - Output compression logic
 - `src\mapper\mapper.py` - Source code
 - `src\mapper\git_info.py` - Source code
 - `src\specs\prompts.py` - Source code
@@ -49,6 +51,11 @@
 - `src\tasks\__init__.py` - Package init
 
 ## Module Details
+
+### `src\output\masker.py`
+_Compress verbose CLI output into minimal, actionable summaries._
+
+**Functions**: `mask_output(raw: str, command_type: CommandType) -> MaskedOutput`
 
 ### `src\pipelines\config.py`
 _Pipeline configuration management._
@@ -162,6 +169,6 @@ _Task tracking module._
 
 ## Stats
 
-- Files: 33
-- Directories: 7
-- Lines: 3655
+- Files: 35
+- Directories: 8
+- Lines: 3835
