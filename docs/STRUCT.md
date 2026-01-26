@@ -21,7 +21,7 @@
 
 - `.claude\steering.md` - Project standards and stack info
 - `pyproject.toml` - Project config
-- `src\server.py` - Server entry
+- `src\server.py` - Server entry and `DispatchGuard` (deduplication/concurrency)
 - `src\pipelines\config.py` - Configuration
 - `src\gui_viewer.py` - Source code
 - `src\output\masker.py` - Output compression logic

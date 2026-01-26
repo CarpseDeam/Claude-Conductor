@@ -57,6 +57,11 @@ Dispatch coding task to CLI agent. Auto-detects mode from content:
 - **Spec mode**: Content starts with `## Spec:` → Two-phase execution: Phase 1 (Test Generation) followed by Phase 2 (Implementation).
 - **Prose mode**: Direct execution for exploratory work, refactors, bug fixes.
 
+**Concurrency & Deduplication:**
+The server uses a `DispatchGuard` to prevent:
+1. **Concurrent Tasks**: Only one task can run per `project_path` at a time.
+2. **Duplicate Dispatches**: Identical content hashes are blocked for 5 minutes.
+
 Spec mode is preferred for new features with clear contracts.
 
 **Parameters:**
@@ -75,7 +80,24 @@ Spec mode is preferred for new features with clear contracts.
   "mode": "spec",
   "cli": "Claude Code",
   "project_path": "C:\\Projects\\my-api",
-  "message": "Spec-driven task launched. CLI will expand tests, implement, and validate."
+  "message": "Task launched. CLI executing in background. Check back with get_task_result(task_id) - do not dispatch again."
+}
+```
+
+**Error Responses (Guard Blocked):**
+```json
+{
+  "status": "already_running",
+  "task_id": "existing_id",
+  "message": "Task already running for this project. Use get_task_result to check status."
+}
+```
+or
+```json
+{
+  "status": "duplicate",
+  "task_id": "existing_id",
+  "message": "Same task already dispatched. Use get_task_result to check status."
 }
 ```
 

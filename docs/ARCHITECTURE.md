@@ -11,6 +11,7 @@ Conductor bridges Claude Desktop to CLI coding agents. The key insight: Desktop 
 Stdio-based MCP server exposing tools to Claude Desktop:
 - Tool registration and schema
 - Request routing to handlers
+- **DispatchGuard**: Prevents concurrent tasks for the same project and deduplicates identical requests within a 5-minute window.
 - JSON response formatting
 
 ### Codebase Mapper (`src/mapper/`)
@@ -92,6 +93,11 @@ Project Files → Mapper → Detector → Codebase Map → Markdown
 Desktop                    Conductor                 CLI Agent
    │                          │                          │
    │─── dispatch(content) ───▶│                          │
+   │                          │─── DispatchGuard check ──┤
+   │                          │    (running? duplicate?)  │
+   │                          │                          │
+   │◀── {status: "blocked"} ──┤ (if guard fails)         │
+   │                          │                          │
    │                          │─── spawn GUI + agent ───▶│
    │                          │    (detects Spec/Prose)  │
    │                          │                          │

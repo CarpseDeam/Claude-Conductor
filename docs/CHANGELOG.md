@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+- 2026-01-26: feat: implement `DispatchGuard` to prevent duplicate and concurrent task dispatches
+- 2026-01-26: refactor: update system prompt with stricter code size and refactoring standards
 - 2026-01-26: feat: include full CLI output in task results and TaskTracker
 - 2026-01-26: docs: remove deprecated git context sections from codebase manifest for performance
 - 2026-01-26: refactor: optimize `CodebaseMapper` for high performance (<1s) using shallow walks and fast key-file identification
