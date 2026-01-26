@@ -89,11 +89,11 @@ Project Files → Mapper → Detector → Codebase Map → Markdown
 ```
 Desktop                    Conductor                 CLI Agent
    │                          │                          │
-   │─── launch_claude_code ──▶│                          │
-   │            OR            │─── spawn GUI + agent ───▶│
-   │─── dispatch_with_spec ──▶│      (with spec prompt)  │
+   │─── dispatch(content) ───▶│                          │
+   │                          │─── spawn GUI + agent ───▶│
+   │                          │    (detects Spec/Prose)  │
    │                          │                          │
-   │◀── {task_id, status} ────│                          │
+   │◀── {task_id, mode} ──────│                          │
    │                          │                          │
    │                          │    ... agent works ...   │
    │                          │                          │

@@ -6,6 +6,7 @@
 
 - `docs/` - Documentation (4 files)
 - `src/` - Source code (3 files)
+- `src\dispatch/` - Task dispatch logic (3 files)
 - `src\git/` - Project files (5 files)
 - `src\mapper/` - Project files (5 files)
 - `src\pipelines/` - Project files (4 files)
@@ -52,6 +53,11 @@
 _Pipeline configuration management._
 
 **PipelineConfig**: `load(cls, project_path: Path) -> 'PipelineConfig', save(self, project_path: Path) -> None`
+
+### `src\dispatch\handler.py`
+_Unified task dispatch handling with mode detection._
+
+**DispatchHandler**: `prepare(self, content: str, project_path: Path, cli: str, model: str | None) -> DispatchRequest, build_prompt(self, request: DispatchRequest, system_prompt: str) -> str`
 
 ### `src\mapper\mapper.py`
 _Main codebase mapping logic._

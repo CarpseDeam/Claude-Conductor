@@ -57,44 +57,16 @@ _Data models for the user service._
 
 ---
 
-### launch_claude_code
+### dispatch
 
-Dispatch coding task to CLI agent. Returns immediately.
-
-**Parameters:**
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `project_path` | string | Yes | Absolute path to project |
-| `task` | string | Yes | Detailed task specification |
-| `cli` | string | No | "claude", "gemini", or "codex" (default: "claude") |
-| `model` | string | No | Model override |
-| `additional_paths` | array | No | Extra directories agent can read |
-| `git_branch` | boolean | No | Create safety branch (default: true) |
-| `godot_project` | string | No | Path for Godot validation |
-
-**Returns:**
-```json
-{
-  "status": "launched",
-  "task_id": "a1b2c3d4",
-  "cli": "Claude Code",
-  "project_path": "C:\\Projects\\my-api"
-}
-```
-
----
-
-### dispatch_with_spec
-
-Dispatch a coding task with an executable spec. The CLI agent will:
-1. Expand the spec into a full pytest test suite
-2. Implement until all tests pass
-3. Run validation commands (lint, typecheck)
+Dispatch coding task to CLI agent. Auto-detects mode from content:
+- **Spec mode**: Content starts with `## Spec:` → expands tests, implements, validates.
+- **Prose mode**: Direct execution for exploratory work, refactors, bug fixes.
 
 **Parameters:**
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `spec_content` | string | Yes | Compact markdown spec content |
+| `content` | string | Yes | Task content. Start with `## Spec:` for spec-driven mode. |
 | `project_path` | string | Yes | Absolute path to project directory |
 | `cli` | string | No | "claude", "gemini", or "codex" (default: "claude") |
 | `model` | string | No | Model override |
@@ -103,16 +75,10 @@ Dispatch a coding task with an executable spec. The CLI agent will:
 ```json
 {
   "status": "launched",
-  "task_id": "t1u2v3w4",
-  "spec_name": "AuthService",
-  "spec_tier": "Unit",
+  "task_id": "a1b2c3d4",
+  "mode": "spec",
   "cli": "Claude Code",
   "project_path": "C:\\Projects\\my-api",
-  "validation": {
-    "tests": true,
-    "typecheck": true,
-    "lint": false
-  },
   "message": "Spec-driven task launched. CLI will expand tests, implement, and validate."
 }
 ```
@@ -126,7 +92,7 @@ Get results of completed task.
 **Parameters:**
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `task_id` | string | Yes | Task ID from launch_claude_code |
+| `task_id` | string | Yes | Task ID returned from `dispatch` |
 
 **Returns:**
 ```json
