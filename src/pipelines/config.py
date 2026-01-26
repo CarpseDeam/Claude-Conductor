@@ -4,12 +4,12 @@ import json
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
-AUTO_DOCS_PROMPT = '''You are a documentation maintainer. Review this git diff and update STRUCT.md in the project root.
+AUTO_DOCS_PROMPT = '''You are a documentation maintainer. Review this git diff and update docs/STRUCT.md.
 
 DIFF:
 {diff}
 
-TARGET FILE: STRUCT.md (project root)
+TARGET FILE: docs/STRUCT.md
 
 RULES:
 1. Add a changelog entry at the top of the "## Changelog" section
@@ -23,7 +23,7 @@ RULES:
 
 5. After updating, commit with message: "docs: [brief description]"
 
-If the diff only touches STRUCT.md, skip to avoid recursive updates.
+If the diff only touches docs/STRUCT.md, skip to avoid recursive updates.
 '''
 
 

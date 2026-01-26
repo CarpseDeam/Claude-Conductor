@@ -14,8 +14,8 @@ SYSTEM_PROMPT = (
     "Write clean, scalable, modular, efficient code. "
     "Follow single responsibility principle. Do not repeat yourself. "
     "Use consistent naming conventions. No unnecessary comments.\n\n"
-    "DOCUMENTATION: If STRUCT.md exists in the project root, update it with your changes. "
-    "If it doesn't exist, create it. Include: project purpose, architecture overview, "
+    "DOCUMENTATION: If docs/STRUCT.md exists, update it with your changes. "
+    "If it doesn't exist, create docs/STRUCT.md. Include: project purpose, architecture overview, "
     "key files/components, and a brief changelog of what you just did. Keep it concise."
 )
 
@@ -183,18 +183,20 @@ class ClaudeCodeMCPServer:
 
         cache = ManifestCache()
         formatter = ManifestFormatter()
-        claude_md_path = project_path / "STRUCT.md"
+        docs_dir = project_path / "docs"
+        struct_md_path = docs_dir / "STRUCT.md"
 
         if not refresh:
             cached = cache.get_cached(project_path)
-            if cached and claude_md_path.exists():
-                markdown = claude_md_path.read_text(encoding="utf-8")
+            if cached and struct_md_path.exists():
+                markdown = struct_md_path.read_text(encoding="utf-8")
                 return [TextContent(type="text", text=markdown)]
 
         assimilator = Assimilator(project_path)
         manifest = assimilator.assimilate(force_refresh=refresh, quick=quick)
         markdown = formatter.to_markdown(manifest)
-        claude_md_path.write_text(markdown, encoding="utf-8")
+        docs_dir.mkdir(exist_ok=True)
+        struct_md_path.write_text(markdown, encoding="utf-8")
 
         return [TextContent(type="text", text=markdown)]
 
