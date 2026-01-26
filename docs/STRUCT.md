@@ -10,6 +10,13 @@ _No changes recorded yet._
 
 - `docs/` - Documentation
 - `src/` - Source code
+  - `assimilator/` - Codebase knowledge generation
+  - `git/` - Automated git workflows
+  - `pipelines/` - Post-commit background agents
+  - `specs/` - Executable specification engine
+  - `tasks/` - Task tracking and persistence
+  - `server.py` - MCP server implementation
+  - `gui_viewer.py` - Real-time streaming GUI
 
 ## Stats
 

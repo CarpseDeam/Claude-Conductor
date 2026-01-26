@@ -49,6 +49,13 @@ Tracks dispatched tasks and results:
 - GUI reports completion
 - Desktop queries results
 
+### Spec Engine (`src/specs/`)
+
+Handles executable specification parsing and prompt building:
+- Parses compact markdown specs (Interface, Must Do, Edge Cases)
+- Generates system prompts for TDD-driven implementation
+- Defines validation requirements (tests, lint, typecheck)
+
 ### Git Workflow (`src/git/`)
 
 Automated commits with AI-generated messages:
@@ -81,7 +88,9 @@ Project Files → Analyzers → Extractors → Manifest → Cache
 Desktop                    Conductor                 CLI Agent
    │                          │                          │
    │─── launch_claude_code ──▶│                          │
-   │                          │─── spawn GUI + agent ───▶│
+   │            OR            │─── spawn GUI + agent ───▶│
+   │─── dispatch_with_spec ──▶│      (with spec prompt)  │
+   │                          │                          │
    │◀── {task_id, status} ────│                          │
    │                          │                          │
    │                          │    ... agent works ...   │

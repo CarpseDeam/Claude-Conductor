@@ -55,6 +55,41 @@ Dispatch coding task to CLI agent. Returns immediately.
 
 ---
 
+### dispatch_with_spec
+
+Dispatch a coding task with an executable spec. The CLI agent will:
+1. Expand the spec into a full pytest test suite
+2. Implement until all tests pass
+3. Run validation commands (lint, typecheck)
+
+**Parameters:**
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `spec_content` | string | Yes | Compact markdown spec content |
+| `project_path` | string | Yes | Absolute path to project directory |
+| `cli` | string | No | "claude", "gemini", or "codex" (default: "claude") |
+| `model` | string | No | Model override |
+
+**Returns:**
+```json
+{
+  "status": "launched",
+  "task_id": "t1u2v3w4",
+  "spec_name": "AuthService",
+  "spec_tier": "Unit",
+  "cli": "Claude Code",
+  "project_path": "C:\\Projects\\my-api",
+  "validation": {
+    "tests": true,
+    "typecheck": true,
+    "lint": false
+  },
+  "message": "Spec-driven task launched. CLI will expand tests, implement, and validate."
+}
+```
+
+---
+
 ### get_task_result
 
 Get results of completed task.
