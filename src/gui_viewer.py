@@ -633,7 +633,7 @@ class ClaudeOutputWindow:
             tracker = TaskTracker()
             files_modified = self._stats.get("files_written", [])
             summary = self._build_summary()
-            cli_output = "".join(self._stats.get("cli_output", []))[-4000:]
+            cli_output = "".join(self._stats.get("cli_output", []))[-500:]
             tracker.complete_task(self._task_id, files_modified, summary, cli_output)
         except Exception as e:
             logger.warning(f"Failed to report task completion: {e}")
