@@ -54,9 +54,10 @@ _Data models for the user service._
 ### dispatch
 
 Dispatch coding task to CLI agent. Auto-detects mode from content:
-- **SPEC MODE (preferred for features)**: Content starts with `## Spec:` → Triggers two-phase execution:
-  - Phase 1: Generate tests only (fresh context)
-  - Phase 2: Implement against tests (fresh context)
+- **SPEC MODE (preferred for features)**: Content starts with `## Spec:` → Triggers spec-driven execution:
+  - Agent implements the interface first
+  - Agent writes tests that verify each Must Do and Edge Case
+  - Tests validate contract/behavior, not implementation details
 - **PROSE MODE**: For bug fixes, refactors, exploratory work. Just describe what to do.
 
 **Concurrency & Deduplication:**
@@ -144,6 +145,21 @@ List recently dispatched tasks.
     {"task_id": "a1b2c3d4", "status": "completed", "cli": "claude"},
     {"task_id": "e5f6g7h8", "status": "running", "cli": "gemini"}
   ]
+}
+```
+
+---
+
+### health_check
+
+Check server health status.
+
+**Returns:**
+```json
+{
+  "status": "ok",
+  "timestamp": "2026-01-26T12:00:00Z",
+  "version": "1.0.0"
 }
 ```
 

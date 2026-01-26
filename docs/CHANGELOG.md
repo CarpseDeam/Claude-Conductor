@@ -6,6 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+- 2026-01-26: docs: update API.md to reflect single-phase spec execution and new health_check tool
 - 2026-01-26: refactor: unify two-phase spec execution into a single-phase (implement then test) workflow
 - 2026-01-26: feat: auto-fail stale tasks in DispatchGuard after 10 minutes
 - 2026-01-26: refactor: update dispatch and get_task_result tool descriptions for better protocol adherence
