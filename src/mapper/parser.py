@@ -54,20 +54,10 @@ class ModuleInfo:
 class PythonParser:
     """Parses Python files to extract structure."""
 
-    MAX_FILE_SIZE: int = 10240
-    MAX_LINES: int = 500
-
     def parse(self, path: Path) -> ModuleInfo | None:
         """Parse a Python file. Returns None if parsing fails."""
         try:
-            if path.stat().st_size > self.MAX_FILE_SIZE:
-                return None
-
             source = path.read_text(encoding="utf-8")
-
-            if source.count('\n') > self.MAX_LINES:
-                return None
-
             tree = ast.parse(source)
         except (SyntaxError, UnicodeDecodeError, OSError):
             return None

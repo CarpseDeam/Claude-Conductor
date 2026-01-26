@@ -13,16 +13,32 @@ Get strategic overview of a codebase. Call this FIRST before coding tasks. Retur
 | `refresh` | boolean | No | Force rebuild, ignore cache |
 
 **Returns:**
-```json
-{
-  "project": "my-api",
-  "lang": "python",
-  "stack": ["FastAPI", "SQLAlchemy"],
-  "structure": {"src/api/": "Route handlers"},
-  "components": [...],
-  "patterns": {"auth": "JWT via python-jose"},
-  "stats": {"files": 42, "lines": 3500}
-}
+```markdown
+# project-name
+
+**Language:** python
+**Frameworks:** FastAPI, Pydantic
+
+## Structure
+- `src/` - Source code (12 files)
+- `tests/` - Tests (5 files)
+
+## Key Files
+- `src/main.py` - Entry point
+- `src/models.py` - Data models
+
+## Module Details
+### `src/models.py`
+_Data models for the user service._
+
+**User**: `__init__(name, email)`, `to_dict() -> dict`
+
+**Functions**: `validate_email(email) -> bool`
+
+## Stats
+- Files: 17
+- Directories: 3
+- Lines: 1250
 ```
 
 ---

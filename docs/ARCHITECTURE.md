@@ -15,14 +15,22 @@ Stdio-based MCP server exposing tools to Claude Desktop:
 
 ### Codebase Mapper (`src/mapper/`)
 
-Generates compressed project manifests for Desktop context efficiency. It detects stack, maps structure, and parses key Python files for interfaces (classes, methods, functions). Optimized for synchronous execution (<2s).
+Generates compressed project manifests for Desktop context efficiency. Optimized for synchronous execution (<2s).
 
 ```
 mapper/
 ├── mapper.py            # Main mapping logic
 ├── detector.py          # Language and stack detection
+├── parser.py            # AST-based Python module analysis
 └── contracts.py         # Data structures
 ```
+
+The mapper performs deep analysis of Python modules using the `PythonParser`, which leverages the `ast` module to extract:
+- **Module-level docstrings** for high-level purpose identification.
+- **Class structures**, including inheritance and public methods.
+- **Function signatures** with type hints.
+- **Key imports** to understand internal dependencies.
+
 
 ### GUI Viewer (`src/gui_viewer.py`)
 

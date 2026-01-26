@@ -1,8 +1,10 @@
 """Codebase mapper for generating project context."""
-from dataclasses import dataclass
+from collections import Counter
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from .detector import StackDetector, StackInfo
+from .git_info import GitInfoExtractor, RecentCommit
 from .parser import PythonParser, ModuleInfo
 
 
@@ -32,6 +34,9 @@ class CodebaseMap:
     key_files: list[FileInfo]
     entry_points: dict[str, str]
     stats: dict[str, int]
+    dependencies: dict[str, list[str]] = field(default_factory=dict)
+    recent_commits: list[RecentCommit] = field(default_factory=list)
+    uncommitted: list[str] = field(default_factory=list)
 
     def to_markdown(self) -> str:
         """Render map as markdown for LLM context."""
@@ -57,6 +62,13 @@ class CodebaseMap:
         lines.extend(["", "## Module Details", ""])
         for f in self.key_files:
             if f.module_info:
+                has_public = (
+                    any(not m.is_private for c in f.module_info.classes for m in c.methods) or
+                    any(not fn.is_private for fn in f.module_info.functions)
+                )
+                if not has_public and not f.module_info.docstring:
+                    continue
+
                 lines.append(f"### `{f.path}`")
                 if f.module_info.docstring:
                     doc = f.module_info.docstring.split('\n\n')[0].strip()
@@ -64,15 +76,35 @@ class CodebaseMap:
                     lines.append("")
 
                 for cls in f.module_info.classes:
-                    methods = [m.signature for m in cls.methods if not m.is_private][:5]
+                    methods = [m.name for m in cls.methods if not m.is_private][:5]
                     if methods:
-                        lines.append(f"**{cls.name}**: `{', '.join(methods)}`")
+                        lines.append(f"**{cls.name}**: {', '.join(methods)}")
 
                 public_funcs = [fn.signature for fn in f.module_info.functions if not fn.is_private]
                 if public_funcs:
                     lines.append(f"**Functions**: `{', '.join(public_funcs[:5])}`")
 
                 lines.append("")
+
+        if self.dependencies:
+            lines.extend(["", "## Dependencies", ""])
+            for module, imports in sorted(self.dependencies.items()):
+                lines.append(f"- `{module}` -> {', '.join(imports)}")
+
+        if self.uncommitted:
+            lines.extend(["", "## Uncommitted Changes", ""])
+            for f in self.uncommitted[:10]:
+                lines.append(f"- `{f}`")
+
+        if self.recent_commits:
+            lines.extend(["", "## Recent Changes", ""])
+            for commit in self.recent_commits:
+                files_str = ", ".join(commit.files[:3])
+                if len(commit.files) > 3:
+                    files_str += f" +{len(commit.files) - 3} more"
+                lines.append(f"- **{commit.hash}**: {commit.message}")
+                if files_str:
+                    lines.append(f"  Files: {files_str}")
 
         if self.entry_points:
             lines.extend(["", "## Entry Points", ""])
@@ -172,6 +204,8 @@ class CodebaseMapper:
         self.project_path = Path(project_path).resolve()
         self.detector = StackDetector()
         self.python_parser = PythonParser()
+        self.git_extractor = GitInfoExtractor()
+        self._all_files: list[FileInfo] = []
 
     def map(self) -> CodebaseMap:
         """Generate codebase map. Synchronous, fast."""
@@ -181,15 +215,11 @@ class CodebaseMapper:
         all_files: list[FileInfo] = []
         total_lines = 0
         dir_count = 0
+        dir_files: dict[str, list[FileInfo]] = {}
 
         for item in self._walk():
             if item.is_dir():
                 dir_count += 1
-                rel_path = str(item.relative_to(self.project_path))
-                purpose = self._infer_dir_purpose(item.name)
-                file_count = sum(1 for f in item.iterdir() if self._is_code_file(f))
-                if file_count > 0 or purpose != "Project files":
-                    directories.append(DirectoryInfo(rel_path, purpose, file_count))
             else:
                 rel_path = str(item.relative_to(self.project_path))
                 purpose = self._infer_file_purpose(item)
@@ -202,8 +232,29 @@ class CodebaseMapper:
                     file_info = FileInfo(rel_path, purpose, lines)
                 all_files.append(file_info)
 
+                parent_rel = str(item.parent.relative_to(self.project_path))
+                if parent_rel not in dir_files:
+                    dir_files[parent_rel] = []
+                dir_files[parent_rel].append(file_info)
+
                 if len(all_files) >= self.MAX_FILES:
                     break
+
+        self._all_files = all_files
+
+        for item in self._walk():
+            if item.is_dir():
+                rel_path = str(item.relative_to(self.project_path))
+                file_count = sum(1 for f in item.iterdir() if self._is_code_file(f))
+                files_in_dir = dir_files.get(rel_path, [])
+                purpose = self._infer_dir_purpose_from_contents(item, files_in_dir)
+                if file_count > 0 or purpose != "Project files":
+                    directories.append(DirectoryInfo(rel_path, purpose, file_count))
+
+        dependencies = self._build_dependency_graph(all_files)
+
+        recent_commits = self.git_extractor.get_recent_commits(self.project_path)
+        uncommitted = self.git_extractor.get_uncommitted_changes(self.project_path)
 
         key_files = self._select_key_files(all_files)
         entry_points = self._infer_entry_points(stack, directories)
@@ -219,7 +270,47 @@ class CodebaseMapper:
                 'dirs': dir_count,
                 'lines': total_lines,
             },
+            dependencies=dependencies,
+            recent_commits=recent_commits,
+            uncommitted=uncommitted,
         )
+
+    def _build_dependency_graph(self, all_files: list[FileInfo]) -> dict[str, list[str]]:
+        """Build dependency graph from parsed modules."""
+        dependencies: dict[str, list[str]] = {}
+        for f in all_files:
+            if f.module_info and f.module_info.imports:
+                internal_imports = [
+                    imp for imp in f.module_info.imports
+                    if self._is_internal_import(imp)
+                ]
+                if internal_imports:
+                    dependencies[f.path] = internal_imports
+        return dependencies
+
+    def _is_internal_import(self, module: str) -> bool:
+        """Check if import is from this project."""
+        parts = module.split('.')
+        for f in self._all_files:
+            if any(part in f.path for part in parts):
+                return True
+        return False
+
+    def _infer_dir_purpose_from_contents(self, dir_path: Path, files: list[FileInfo]) -> str:
+        """Infer directory purpose from its files."""
+        name = dir_path.name.lower()
+        if name in self.DIR_PURPOSES:
+            return self.DIR_PURPOSES[name]
+
+        if not files:
+            return "Project files"
+
+        purposes = [f.purpose for f in files]
+        counts = Counter(p for p in purposes if p not in ("Source code", "Package init"))
+        if counts:
+            return counts.most_common(1)[0][0]
+
+        return "Source code"
 
     def _walk(self):
         """Walk project directory, yielding files and dirs."""
@@ -248,10 +339,6 @@ class CodebaseMapper:
     def _is_code_file(self, path: Path) -> bool:
         """Check if file is a code file."""
         return path.is_file() and path.suffix.lower() in self.CODE_EXTENSIONS
-
-    def _infer_dir_purpose(self, name: str) -> str:
-        """Infer directory purpose from name."""
-        return self.DIR_PURPOSES.get(name.lower(), "Project files")
 
     def _infer_file_purpose(self, path: Path) -> str:
         """Infer file purpose from name and location."""
