@@ -169,7 +169,40 @@ class ClaudeCodeMCPServer:
         (project_path / "docs").mkdir(exist_ok=True)
         struct_md.write_text(markdown, encoding="utf-8")
 
+        self._generate_steering_file(project_path, codebase_map)
+
         return [TextContent(type="text", text=markdown)]
+
+    def _generate_steering_file(self, project_path: Path, codebase_map) -> None:
+        """Generate .claude/steering.md with project standards."""
+        claude_dir = project_path / ".claude"
+        claude_dir.mkdir(exist_ok=True)
+
+        stack = codebase_map.stack
+        frameworks = ", ".join(stack.frameworks) if stack.frameworks else "None"
+        tools = ", ".join(stack.tools) if stack.tools else "None"
+
+        content = f"""# Project: {codebase_map.project_name}
+
+## Stack
+- Language: {stack.language}
+- Frameworks: {frameworks}
+- Tools: {tools}
+
+## Code Standards
+- Max file size: 200 lines
+- Max function size: 25 lines
+- Full type hints required
+- Use dataclasses/pydantic for structured data
+- pathlib over os.path
+
+## Testing
+- pytest for all tests
+- No mocks unless external service
+- Test file mirrors source: src/foo.py → tests/test_foo.py
+"""
+        steering_file = claude_dir / "steering.md"
+        steering_file.write_text(content, encoding="utf-8")
 
     def _handle_dispatch_assimilate(self, arguments: dict) -> list[TextContent]:
         """Handle dispatch_assimilate tool call - deprecated."""

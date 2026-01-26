@@ -1,6 +1,6 @@
 """Output processing utilities."""
 
-from src.output.masker import (
+from .masker import (
     CommandType,
     ErrorLocation,
     MaskedOutput,
