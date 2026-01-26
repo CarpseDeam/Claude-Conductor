@@ -65,7 +65,7 @@ class PipelineConfig:
                 PipelineStep(
                     name="auto_docs",
                     agent="gemini",
-                    model="gemini-3.0-flash-experimental",
+                    model="gemini-3-flash-preview",
                     task_template=AUTO_DOCS_PROMPT,
                     enabled=True,
                     include_diff=True
