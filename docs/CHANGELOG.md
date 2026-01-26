@@ -6,6 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+- 2026-01-26: refactor: replace `Assimilator` with `CodebaseMapper` and remove `src/assimilator/` module
 - 2026-01-26: feat: add `dispatch_with_spec` tool for TDD-driven task execution
 - 2026-01-26: fix: improve pipeline agent dispatch reliability using temporary files and shell pipes
 

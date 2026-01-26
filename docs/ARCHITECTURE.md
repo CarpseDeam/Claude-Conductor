@@ -13,25 +13,15 @@ Stdio-based MCP server exposing tools to Claude Desktop:
 - Request routing to handlers
 - JSON response formatting
 
-### Codebase Assimilator (`src/assimilator/`)
+### Codebase Mapper (`src/mapper/`)
 
-Generates compressed project manifests for Desktop context efficiency.
+Generates compressed project manifests for Desktop context efficiency. Optimized for synchronous execution (<2s).
 
 ```
-assimilator/
-├── core.py              # Orchestrator
-├── manifest.py          # Data contracts
-├── analyzers/           # Extract project info
-│   ├── python_analyzer.py
-│   ├── structure_analyzer.py
-│   └── git_analyzer.py
-├── extractors/          # Extract patterns/symbols
-│   ├── imports.py
-│   ├── symbols.py
-│   └── patterns.py
-└── output/
-    ├── formatter.py     # Compress for LLM
-    └── cache.py         # Cache invalidation
+mapper/
+├── mapper.py            # Main mapping logic
+├── detector.py          # Language and stack detection
+└── contracts.py         # Data structures
 ```
 
 ### GUI Viewer (`src/gui_viewer.py`)
@@ -75,11 +65,11 @@ Background agents triggered after commits:
 ### Manifest Generation
 
 ```
-Project Files → Analyzers → Extractors → Manifest → Cache
-                   │            │           │
-                   ▼            ▼           ▼
-              Structure    Patterns    ~1.5K tokens
-              Symbols      Imports     (compressed)
+Project Files → Mapper → Detector → Codebase Map → Markdown
+                   │         │          │           │
+                   ▼         ▼          ▼           ▼
+              Structure   Stack      ~1K tokens   STRUCT.md
+              Files       Lang       (optimized)
 ```
 
 ### Task Dispatch

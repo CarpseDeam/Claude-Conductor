@@ -10,8 +10,8 @@ _No changes recorded yet._
 
 - `docs/` - Documentation
 - `src/` - Source code
-  - `assimilator/` - Codebase knowledge generation
   - `git/` - Automated git workflows
+  - `mapper/` - Codebase mapping and manifest generation
   - `pipelines/` - Post-commit background agents
   - `specs/` - Executable specification engine
   - `tasks/` - Task tracking and persistence

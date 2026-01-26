@@ -4,14 +4,13 @@
 
 ### get_manifest
 
-Get compressed codebase knowledge. Call FIRST before coding tasks.
+Get compressed codebase knowledge. Call FIRST before coding tasks. Optimized for performance (<2s).
 
 **Parameters:**
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `project_path` | string | Yes | Absolute path to project root |
 | `refresh` | boolean | No | Force rebuild, ignore cache |
-| `quick` | boolean | No | Fast shallow analysis |
 
 **Returns:**
 ```json
@@ -133,7 +132,9 @@ List recently dispatched tasks.
 
 ---
 
-### dispatch_assimilate
+### dispatch_assimilate [DEPRECATED]
+
+**Note: This tool is deprecated. Use `get_manifest` instead, which is now fast enough for synchronous use.**
 
 Background codebase analysis. Non-blocking.
 

@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .detector import StackDetector, StackInfo
+from .parser import PythonParser, ModuleInfo
 
 
 @dataclass
@@ -11,6 +12,7 @@ class FileInfo:
     path: str
     purpose: str
     lines: int
+    module_info: ModuleInfo | None = None
 
 
 @dataclass
@@ -51,6 +53,26 @@ class CodebaseMap:
         lines.extend(["", "## Key Files", ""])
         for f in self.key_files:
             lines.append(f"- `{f.path}` - {f.purpose}")
+
+        lines.extend(["", "## Module Details", ""])
+        for f in self.key_files:
+            if f.module_info:
+                lines.append(f"### `{f.path}`")
+                if f.module_info.docstring:
+                    doc = f.module_info.docstring.split('\n\n')[0].strip()
+                    lines.append(f"_{doc}_")
+                    lines.append("")
+
+                for cls in f.module_info.classes:
+                    methods = [m.signature for m in cls.methods if not m.is_private][:5]
+                    if methods:
+                        lines.append(f"**{cls.name}**: `{', '.join(methods)}`")
+
+                public_funcs = [fn.signature for fn in f.module_info.functions if not fn.is_private]
+                if public_funcs:
+                    lines.append(f"**Functions**: `{', '.join(public_funcs[:5])}`")
+
+                lines.append("")
 
         if self.entry_points:
             lines.extend(["", "## Entry Points", ""])
@@ -149,6 +171,7 @@ class CodebaseMapper:
     def __init__(self, project_path: Path | str) -> None:
         self.project_path = Path(project_path).resolve()
         self.detector = StackDetector()
+        self.python_parser = PythonParser()
 
     def map(self) -> CodebaseMap:
         """Generate codebase map. Synchronous, fast."""
@@ -172,7 +195,12 @@ class CodebaseMapper:
                 purpose = self._infer_file_purpose(item)
                 lines = self._count_lines(item)
                 total_lines += lines
-                all_files.append(FileInfo(rel_path, purpose, lines))
+                if item.suffix == '.py':
+                    module_info = self.python_parser.parse(item)
+                    file_info = FileInfo(rel_path, purpose, lines, module_info)
+                else:
+                    file_info = FileInfo(rel_path, purpose, lines)
+                all_files.append(file_info)
 
                 if len(all_files) >= self.MAX_FILES:
                     break
