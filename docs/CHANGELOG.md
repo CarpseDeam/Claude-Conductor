@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+- 2026-01-26: fix: improve pipeline agent dispatch reliability using temporary files and shell pipes
+
 ### Added
 - Codebase assimilator for compressed project manifests
 - `get_manifest` MCP tool for instant codebase knowledge

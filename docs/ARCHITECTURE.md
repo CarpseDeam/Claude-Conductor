@@ -61,6 +61,7 @@ Automated commits with AI-generated messages:
 Background agents triggered after commits:
 - Auto-documentation (Gemini Flash)
 - Configurable per-project
+- **Reliable Dispatch**: Uses temporary files and shell pipes to handle large diffs and ensure Windows compatibility.
 
 ## Data Flow
 
