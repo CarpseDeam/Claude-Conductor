@@ -15,7 +15,7 @@ Stdio-based MCP server exposing tools to Claude Desktop:
 
 ### Codebase Mapper (`src/mapper/`)
 
-Generates compressed project manifests for Desktop context efficiency. Optimized for synchronous execution (<2s).
+Generates compressed project manifests for Desktop context efficiency. It detects stack, maps structure, and parses key Python files for interfaces (classes, methods, functions). Optimized for synchronous execution (<2s).
 
 ```
 mapper/
