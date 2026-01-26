@@ -255,6 +255,17 @@ class ClaudeCodeMCPServer:
         if model:
             cmd.extend(["--model", model])
 
+        if request.mode == DispatchMode.SPEC:
+            cmd.append("--spec-mode")
+            test_path = handler.get_test_path(request)
+            if test_path:
+                cmd.extend(["--test-path", test_path])
+                phase2_prompt = handler.build_phase2_prompt(request, test_path, SYSTEM_PROMPT)
+                if phase2_prompt:
+                    phase2_file = Path(project_path) / "_dispatch_prompt_phase2.txt"
+                    phase2_file.write_text(phase2_prompt, encoding='utf-8')
+                    cmd.extend(["--phase2-prompt", str(phase2_file)])
+
         subprocess.Popen(
             cmd,
             creationflags=subprocess.CREATE_NO_WINDOW,

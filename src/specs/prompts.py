@@ -1,5 +1,7 @@
 """Prompt templates for spec-driven development."""
 
+import warnings
+
 from .contracts import SpecDocument, SpecTier
 
 
@@ -8,14 +10,139 @@ class SpecPromptBuilder:
 
     MAX_ITERATIONS: int = 5
 
-    def build_full_prompt(self, spec: SpecDocument) -> str:
-        """
-        Build compound prompt for complete spec-driven workflow.
+    def build_phase1_prompt(self, spec: SpecDocument) -> str:
+        """Build prompt for test generation only (Phase 1).
 
-        The CLI agent will:
-        1. Expand the spec into a full pytest test suite
-        2. Implement until all tests pass
-        3. Run validation commands and iterate if needed
+        Args:
+            spec: The specification document.
+
+        Returns:
+            Prompt string that instructs CLI to generate tests only.
+        """
+        test_path = self._infer_test_path(spec)
+        sections = [
+            "# Phase 1: Test Generation",
+            "",
+            "## CRITICAL: TRUST THE SPEC",
+            "",
+            "The specification below is COMPLETE. Do not:",
+            "- Read README, ARCHITECTURE, or documentation files",
+            "- Search for patterns or conventions in the codebase",
+            "- Explore directory structures",
+            "- Read files unrelated to test generation",
+            "",
+            "Only read files that:",
+            "1. You need to import from (check the target path's neighbors)",
+            "2. Contain types/classes referenced in the interface",
+            "",
+            "The spec tells you exactly what to test. Trust it.",
+            "",
+            "## CIRCUIT BREAKER",
+            "",
+            "If you have made 8+ file reads without writing any code, STOP.",
+            "You are exploring instead of implementing. The spec is complete.",
+            "Write the tests now with what you know.",
+            "",
+            "## CRITICAL CONSTRAINT: DO NOT WRITE IMPLEMENTATION CODE",
+            "",
+            "You are FORBIDDEN from writing implementation code in this phase.",
+            "Your ONLY task is to generate the test file.",
+            "Do not create the implementation file.",
+            "Do not write any production code.",
+            "Only write tests.",
+            "",
+            "## THE SPECIFICATION",
+            "",
+            spec.to_prompt_context(),
+            "",
+            "## YOUR TASK",
+            "",
+            f"Create a pytest test suite at: `{test_path}`",
+            "",
+            "Test Generation Rules:",
+            "1. Create one test per 'Must Do' requirement",
+            "2. Create one test per edge case",
+            "3. Create tests for precondition violations",
+            "4. Create tests for postcondition verification",
+            "5. Create tests verifying 'Must Not Do' constraints",
+            "",
+            "Write tests that will FAIL until implementation exists.",
+            "Do NOT write any implementation code.",
+        ]
+        return "\n".join(sections)
+
+    def build_phase2_prompt(self, spec: SpecDocument, test_path: str) -> str:
+        """Build prompt for implementation against existing tests (Phase 2).
+
+        Args:
+            spec: The specification document.
+            test_path: Path to the test file generated in phase 1.
+
+        Returns:
+            Prompt string that instructs CLI to implement against tests.
+        """
+        impl_path = self._infer_impl_path(spec)
+        sections = [
+            "# Phase 2: Implementation",
+            "",
+            "## CRITICAL: TRUST THE SPEC",
+            "",
+            "The specification below is COMPLETE. Do not:",
+            "- Read README, ARCHITECTURE, or documentation files",
+            "- Search for patterns or conventions in the codebase",
+            "- Explore directory structures",
+            "- Read files unrelated to your implementation",
+            "",
+            "Only read files that:",
+            "1. You need to import from (check the target path's neighbors)",
+            "2. Contain types/classes referenced in the interface",
+            "3. The test file at the specified path",
+            "",
+            "The spec tells you exactly what to build. Trust it.",
+            "",
+            "## CIRCUIT BREAKER",
+            "",
+            "If you have made 8+ file reads without writing any code, STOP.",
+            "You are exploring instead of implementing. The spec is complete.",
+            "Write the implementation now with what you know.",
+            "",
+            "## CRITICAL CONSTRAINT: DO NOT MODIFY TESTS",
+            "",
+            "You are FORBIDDEN from modifying the test file.",
+            "The tests at the path below are fixed and immutable.",
+            "Your task is to make them pass, not to change them.",
+            "Do not edit, delete, or modify any test code.",
+            "",
+            f"## TEST FILE LOCATION: `{test_path}`",
+            "",
+            "Read this file to understand what you must implement.",
+            "Then implement the code to make all tests pass.",
+            "",
+            "## THE SPECIFICATION",
+            "",
+            spec.to_prompt_context(),
+            "",
+            "## YOUR TASK",
+            "",
+            f"Implement the specification at: `{impl_path}`",
+            "",
+            "Implementation Rules:",
+            "1. Follow interface signatures EXACTLY",
+            "2. Implement minimal code to pass all tests",
+            "3. Handle all edge cases as specified",
+            "4. Ensure preconditions are checked",
+            "5. Ensure postconditions are satisfied",
+            "",
+            "Run the tests and iterate until all pass.",
+            f"Test command: {spec.validation.tests}",
+        ]
+        return "\n".join(sections)
+
+    def build_full_prompt(self, spec: SpecDocument) -> str:
+        """DEPRECATED: Use build_phase1_prompt and build_phase2_prompt instead.
+
+        Build compound prompt for complete spec-driven workflow.
+        This single-phase approach is deprecated in favor of two-phase execution.
 
         Args:
             spec: The specification document to expand.
@@ -23,6 +150,12 @@ class SpecPromptBuilder:
         Returns:
             Complete prompt string for CLI agent.
         """
+        warnings.warn(
+            "build_full_prompt is deprecated. Use build_phase1_prompt and "
+            "build_phase2_prompt for two-phase execution.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         sections = [
             "# Spec-Driven Implementation Task",
             "",

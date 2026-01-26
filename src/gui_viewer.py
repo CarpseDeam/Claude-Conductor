@@ -54,7 +54,8 @@ class ClaudeOutputWindow:
 
     def __init__(self, project_path: str, prompt: str, additional_dirs: list = None,
                  prompt_file: str = None, cli: str = "claude", model: str = None,
-                 git_branch: str = None, godot_project: str = None, task_id: str = None):
+                 git_branch: str = None, godot_project: str = None, task_id: str = None,
+                 spec_mode: bool = False, phase2_prompt: str = None, test_path: str = None):
         self._project_path = project_path
         self._prompt = prompt
         self._additional_dirs = additional_dirs or []
@@ -65,6 +66,10 @@ class ClaudeOutputWindow:
         self._git_branch = git_branch
         self._godot_project = godot_project
         self._task_id = task_id
+        self._spec_mode = spec_mode
+        self._phase2_prompt = phase2_prompt
+        self._test_path = test_path
+        self._current_phase = 1 if spec_mode else 0
         self._process = None
         self._stats = self._init_stats()
         self._last_tool_type = None
@@ -147,11 +152,18 @@ class ClaudeOutputWindow:
         self._status.config(text=text, fg=color)
     
     def _run_claude(self):
+        if self._spec_mode:
+            self._run_two_phase()
+        else:
+            self._run_single_phase(self._prompt)
+
+    def _run_single_phase(self, prompt: str) -> bool:
+        """Run a single CLI invocation. Returns True on success."""
         cmd = self._config["cmd"]
-        
+
         if self._model and self._config.get("model_flag"):
             cmd = f'{cmd} {self._config["model_flag"]} {self._model}'
-        
+
         if self._additional_dirs:
             if self._config["add_dir_flag"]:
                 add_dirs = " ".join(f'{self._config["add_dir_flag"]} "{d}"' for d in self._additional_dirs)
@@ -159,15 +171,15 @@ class ClaudeOutputWindow:
             elif self._cli == "gemini":
                 dirs_csv = ",".join(self._additional_dirs)
                 cmd = f'{cmd} --include-directories "{dirs_csv}"'
-        
+
         if not self._config["uses_stdin"]:
-            escaped_prompt = self._prompt.replace('"', '\\"')
+            escaped_prompt = prompt.replace('"', '\\"')
             cmd = f'{cmd} "{escaped_prompt}"'
-        
+
         model_display = self._model or "default"
         self._root.after(0, lambda: self._append(f"Starting {self._config['title']} ({model_display})...\n\n"))
         self._root.after(0, lambda: self._set_status("Running..."))
-        
+
         try:
             if self._config["uses_stdin"]:
                 self._process = subprocess.Popen(
@@ -182,7 +194,7 @@ class ClaudeOutputWindow:
                     encoding='utf-8',
                     errors='replace'
                 )
-                self._process.stdin.write(self._prompt)
+                self._process.stdin.write(prompt)
                 self._process.stdin.close()
             else:
                 self._process = subprocess.Popen(
@@ -196,28 +208,67 @@ class ClaudeOutputWindow:
                     encoding='utf-8',
                     errors='replace'
                 )
-            
+
             for line in iter(self._process.stdout.readline, ""):
                 segments = self._format_line(line)
                 for text, tag in segments:
                     self._root.after(0, lambda t=text, g=tag: self._append(t, g))
 
             self._process.wait()
-            self._root.after(0, self._show_summary)
+            return self._process.returncode == 0
 
-            if self._process.returncode == 0:
-                self._root.after(0, lambda: self._set_status("Completed successfully!", "#00ff00"))
-                self._report_task_completion()
-                git_thread = threading.Thread(target=self._auto_git_commit, daemon=True)
-                git_thread.start()
-            else:
-                self._root.after(0, lambda: self._set_status(f"Exited with code {self._process.returncode}", "#ff6600"))
-                self._report_task_failure(f"Process exited with code {self._process.returncode}")
-        
         except Exception as e:
             self._root.after(0, lambda: self._append(f"\nERROR: {e}\n", "error"))
-            self._root.after(0, lambda: self._set_status(f"Error: {e}", "#ff0000"))
-            self._report_task_failure(str(e))
+            return False
+
+    def _run_two_phase(self):
+        """Run two-phase spec execution with GUI updates between phases."""
+        self._root.after(0, lambda: self._root.title(
+            f"Phase 1: Generating tests... - {Path(self._project_path).name}"
+        ))
+
+        phase1_success = self._run_single_phase(self._prompt)
+        self._root.after(0, self._show_summary)
+
+        if not phase1_success:
+            self._root.after(0, lambda: self._set_status("Phase 1 failed", "#ff6600"))
+            self._report_task_failure("Phase 1 (test generation) failed")
+            return
+
+        test_file = Path(self._project_path) / self._test_path if self._test_path else None
+        if test_file and not test_file.exists():
+            self._root.after(0, lambda: self._append(
+                f"\n[ERROR] Expected test file not found: {self._test_path}\n", "error"
+            ))
+            self._root.after(0, lambda: self._set_status("Phase 1 failed - no test file", "#ff6600"))
+            self._report_task_failure(f"Test file not generated: {self._test_path}")
+            return
+
+        if not self._phase2_prompt:
+            self._root.after(0, lambda: self._set_status("Phase 1 complete (no phase 2)", "#00ff00"))
+            self._report_task_completion()
+            return
+
+        self._current_phase = 2
+        self._stats = self._init_stats()
+        self._root.after(0, lambda: self._append("\n" + "=" * 50 + "\n", "info"))
+        self._root.after(0, lambda: self._append("PHASE 2: IMPLEMENTATION\n", "info"))
+        self._root.after(0, lambda: self._append("=" * 50 + "\n\n", "info"))
+        self._root.after(0, lambda: self._root.title(
+            f"Phase 2: Implementing... - {Path(self._project_path).name}"
+        ))
+
+        phase2_success = self._run_single_phase(self._phase2_prompt)
+        self._root.after(0, self._show_summary)
+
+        if phase2_success:
+            self._root.after(0, lambda: self._set_status("Both phases completed!", "#00ff00"))
+            self._report_task_completion()
+            git_thread = threading.Thread(target=self._auto_git_commit, daemon=True)
+            git_thread.start()
+        else:
+            self._root.after(0, lambda: self._set_status("Phase 2 failed", "#ff6600"))
+            self._report_task_failure("Phase 2 (implementation) failed")
     
     def _format_line(self, line: str) -> list:
         if self._cli == "gemini":
@@ -654,7 +705,7 @@ class ClaudeOutputWindow:
 
 def main():
     if len(sys.argv) < 3:
-        print("Usage: gui_viewer.py <project_path> <prompt_file> [--add-dir <path>]... [--cli claude|gemini|codex] [--model <model>] [--git-branch <n>] [--godot-project <path>] [--task-id <id>]")
+        print("Usage: gui_viewer.py <project_path> <prompt_file> [--add-dir <path>]... [--cli claude|gemini|codex] [--model <model>] [--git-branch <n>] [--godot-project <path>] [--task-id <id>] [--spec-mode] [--phase2-prompt <file>] [--test-path <path>]")
         sys.exit(1)
 
     project_path = sys.argv[1]
@@ -666,6 +717,9 @@ def main():
     git_branch = None
     godot_project = None
     task_id = None
+    spec_mode = False
+    phase2_prompt_file = None
+    test_path = None
 
     i = 3
     while i < len(sys.argv):
@@ -687,14 +741,26 @@ def main():
         elif sys.argv[i] == "--task-id" and i + 1 < len(sys.argv):
             task_id = sys.argv[i + 1]
             i += 2
+        elif sys.argv[i] == "--spec-mode":
+            spec_mode = True
+            i += 1
+        elif sys.argv[i] == "--phase2-prompt" and i + 1 < len(sys.argv):
+            phase2_prompt_file = sys.argv[i + 1]
+            i += 2
+        elif sys.argv[i] == "--test-path" and i + 1 < len(sys.argv):
+            test_path = sys.argv[i + 1]
+            i += 2
         else:
             i += 1
 
     prompt = Path(prompt_file).read_text(encoding="utf-8")
+    phase2_prompt = None
+    if phase2_prompt_file:
+        phase2_prompt = Path(phase2_prompt_file).read_text(encoding="utf-8")
 
     window = ClaudeOutputWindow(
         project_path, prompt, additional_dirs, prompt_file, cli, model,
-        git_branch, godot_project, task_id
+        git_branch, godot_project, task_id, spec_mode, phase2_prompt, test_path
     )
     window.run()
 
