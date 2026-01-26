@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+- 2026-01-26: feat: add `.claude/steering.md` generation with project standards and stack info
+- 2026-01-26: feat: implement CIRCUIT BREAKER in spec prompts to prevent excessive codebase exploration
+- 2026-01-26: refactor: use relative imports in `src/output`
 - 2026-01-26: docs: update documentation to reflect latest spec validation and output compression features
 - 2026-01-26: feat: add `SpecValidationResult` and `validate_spec` for robust specification verification
 - 2026-01-26: feat: enhance spec prompt to prioritize specification accuracy and minimize unnecessary codebase exploration

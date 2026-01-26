@@ -4,6 +4,7 @@
 
 ## Structure
 
+- `.claude/` - Project-level steering (1 file)
 - `docs/` - Documentation (4 files)
 - `src/` - Source code (3 files)
 - `src\dispatch/` - Task dispatch logic (2 files)
@@ -16,6 +17,7 @@
 
 ## Key Files
 
+- `.claude\steering.md` - Project standards and stack info
 - `pyproject.toml` - Project config
 - `src\server.py` - Server entry
 - `src\pipelines\config.py` - Configuration

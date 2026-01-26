@@ -15,7 +15,7 @@ Stdio-based MCP server exposing tools to Claude Desktop:
 
 ### Codebase Mapper (`src/mapper/`)
 
-Generates compressed project manifests for Desktop context efficiency. Optimized for synchronous execution (<2s).
+Generates compressed project manifests for Desktop context efficiency. Optimized for synchronous execution (<2s). Also generates `.claude/steering.md` to provide coding agents with project-specific standards and stack information.
 
 ```
 mapper/
@@ -58,6 +58,7 @@ Handles executable specification parsing and prompt building:
 - **Validation**: Provides `validate_spec` for non-throwing verification of spec format and requirements.
 - Generates system prompts for TDD-driven implementation
 - **Spec-First Strategy**: Instructs agents to treat the specification as the source of truth, minimizing unnecessary codebase exploration to ensure strict adherence to the defined interface.
+- **Circuit Breaker**: Implements an 8-read limit for specification-based tasks. If an agent makes more than 8 file reads without writing code, it is forced to stop exploration and begin implementation based on the spec.
 - **Output Compression**: Instructs agents to summarize validation output (test results, linter errors) into compact formats to prevent context bloat during iterative development.
 - Defines validation requirements (tests, lint, typecheck)
 
