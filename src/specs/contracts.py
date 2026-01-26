@@ -24,6 +24,15 @@ class ValidationConfig:
 
 
 @dataclass
+class SpecValidationResult:
+    """Result of validating a spec document."""
+
+    is_valid: bool
+    spec: "SpecDocument | None"
+    errors: list[str]
+
+
+@dataclass
 class SpecDocument:
     """Complete specification document for a feature or system."""
 
