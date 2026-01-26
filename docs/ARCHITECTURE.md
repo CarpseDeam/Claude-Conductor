@@ -102,7 +102,7 @@ Desktop                    Conductor                 CLI Agent
    │                          │◀─── completion ──────────│
    │                          │                          │
    │─── get_task_result ─────▶│                          │
-   │◀── {summary, files} ─────│                          │
+   │◀── {summary, files, cli_output} ─│                  │
 ```
 
 ## CLI Backend Abstraction
