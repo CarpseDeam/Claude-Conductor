@@ -4,26 +4,34 @@ import json
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
-AUTO_DOCS_PROMPT = '''You are a documentation maintainer. Review this git diff and update docs/STRUCT.md.
+AUTO_DOCS_PROMPT = '''You are a documentation maintainer. Review this git diff and update the relevant documentation files.
 
 DIFF:
 {diff}
 
-TARGET FILE: docs/STRUCT.md
+TARGET FILES:
+- docs/CHANGELOG.md - Change history (ALWAYS add entry)
+- docs/STRUCT.md - Codebase structure (update if components/structure changed)
+- docs/ARCHITECTURE.md - System design (update if architecture changed)
+- docs/API.md - API reference (update if public interfaces changed)
 
 RULES:
-1. Add a changelog entry at the top of the "## Changelog" section
-   Format: "- type: description" (feat/fix/refactor/docs)
+1. ALWAYS add a changelog entry to docs/CHANGELOG.md
+   Format: "- YYYY-MM-DD: type: description" (feat/fix/refactor/docs)
 
-2. Update any outdated component or structure information based on the diff
+2. Update docs/STRUCT.md if the diff changes components, modules, or directory structure
 
-3. Be surgical - only modify sections that need updating
+3. Update docs/ARCHITECTURE.md if the diff changes system design, data flow, or core patterns
 
-4. Keep tone professional and concise
+4. Update docs/API.md if the diff changes public interfaces, endpoints, or function signatures
 
-5. After updating, commit with message: "docs: [brief description]"
+5. Be surgical - only modify sections that need updating in each file
 
-If the diff only touches docs/STRUCT.md, skip to avoid recursive updates.
+6. Keep tone professional and concise
+
+7. After updating, commit with message: "docs: [brief description]"
+
+If the diff only touches files in docs/, skip entirely to avoid recursive updates.
 '''
 
 
