@@ -23,10 +23,20 @@ class DispatchGuard:
     def __init__(self) -> None:
         self._recent_dispatches: dict[str, tuple[str, float]] = {}
 
+    STALE_TASK_SECONDS = 600  # 10 minutes - tasks older than this are considered stale
+
     def check_running_task(self, project_path: str, tracker: TaskTracker) -> dict | None:
         """Return blocking response if a task is already running for this project."""
+        from datetime import datetime
+        now = datetime.now()
         for task in tracker.get_recent_tasks(10):
             if task.project_path == project_path and task.status == TaskStatus.RUNNING:
+                age = (now - task.started_at).total_seconds()
+                if age > self.STALE_TASK_SECONDS:
+                    task.status = TaskStatus.FAILED
+                    task.error = "Stale task - auto-failed after 10 minutes"
+                    tracker._save(task)
+                    continue
                 return {
                     "status": "already_running",
                     "task_id": task.task_id,
@@ -121,17 +131,34 @@ class ClaudeCodeMCPServer:
             Tool(
                 name="dispatch",
                 description=(
-                    "Dispatch a coding task to CLI agent. Auto-detects mode from content:\n"
-                    "- Spec mode: Content starts with '## Spec:' → expands tests, implements, validates\n"
-                    "- Prose mode: Direct execution for exploratory work, refactors, bug fixes\n"
-                    "Spec mode is preferred for new features with clear contracts."
+                    "Dispatch a coding task to CLI agent. Auto-detects mode from content:\n\n"
+                    "**SPEC MODE (preferred for features):** Content starts with '## Spec:' triggers two-phase execution:\n"
+                    "- Phase 1: Generate tests only (fresh context)\n"
+                    "- Phase 2: Implement against tests (fresh context)\n\n"
+                    "Spec format:\n"
+                    "```\n"
+                    "## Spec: FeatureName\n"
+                    "Brief description.\n\n"
+                    "### Interface\n"
+                    "- `ClassName.method(params) -> ReturnType` — Description\n\n"
+                    "### Must Do\n"
+                    "- Required behaviors\n\n"
+                    "### Must Not Do\n"
+                    "- Forbidden behaviors\n\n"
+                    "### Edge Cases\n"
+                    "- Edge case → expected behavior\n\n"
+                    "### Target Paths\n"
+                    "- `src/module.py` — Description\n"
+                    "```\n\n"
+                    "**PROSE MODE:** For bug fixes, refactors, exploratory work. Just describe what to do.\n\n"
+                    "USE SPEC MODE for any non-trivial feature. USE PROSE MODE only for simple fixes."
                 ),
                 inputSchema={
                     "type": "object",
                     "properties": {
                         "content": {
                             "type": "string",
-                            "description": "Task content. Start with '## Spec:' for spec-driven mode."
+                            "description": "Task content. Start with '## Spec:' for spec-driven mode (preferred for features)."
                         },
                         "project_path": {
                             "type": "string",
@@ -153,8 +180,8 @@ class ClaudeCodeMCPServer:
             Tool(
                 name="get_task_result",
                 description=(
-                    "Get the result of a dispatched coding task. Call this after user indicates "
-                    "the task is finished. Returns: status, files modified, summary, duration."
+                    "Get the result of a dispatched coding task. ONLY call this when user explicitly "
+                    "says the task is done/finished/complete. NEVER call immediately after dispatch."
                 ),
                 inputSchema={
                     "type": "object",
@@ -346,7 +373,7 @@ class ClaudeCodeMCPServer:
             response["spec_name"] = request.spec_name
 
         response["message"] = (
-            "Task launched. CLI executing in background. Check back with get_task_result(task_id) - do not dispatch again."
+            "Task launched. DO NOT call get_task_result - wait for user to confirm completion."
         )
 
         return [TextContent(type="text", text=json.dumps(response, indent=2))]

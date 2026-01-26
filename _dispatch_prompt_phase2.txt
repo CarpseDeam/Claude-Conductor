@@ -28,51 +28,53 @@ The tests at the path below are fixed and immutable.
 Your task is to make them pass, not to change them.
 Do not edit, delete, or modify any test code.
 
-## TEST FILE LOCATION: `tests/test_stringreverser.py`
+## TEST FILE LOCATION: `tests/test_singlephasespecexecution.py`
 
 Read this file to understand what you must implement.
 Then implement the code to make all tests pass.
 
 ## THE SPECIFICATION
 
-# Specification: StringReverser
-Tier: HOTFIX
+# Specification: SinglePhaseSpecExecution
+Tier: FEATURE
 
 ## Description
-A simple string reversal utility for testing the two-phase dispatch system.
+Refactor the two-phase spec system into a single phase where implementation comes first, then tests are derived from the spec's requirements.
 
 ## Interface
-- `reverse_string(s: str) -> str`
+- `SpecPhaseRunner.get_request(self) -> PhaseRequest` — Returns single unified request (replaces get_phase1_request/get_phase2_request)
+- `SpecPhaseRunner.complete(self, success: bool) -> None` — Marks execution complete (replaces complete_phase1)
+- `SpecPromptBuilder.build_prompt(self, spec: SpecDocument) -> str` — Single unified prompt (replaces build_phase1_prompt/build_phase2_prompt)
+- Remove `infer_test_path`, `get_phase2_request`, `complete_phase1` methods
 
 ## Must Do
-- Return the input string reversed
-- Handle empty strings
+- Single CLI invocation per spec (not two phases)
+- Prompt instructs agent to: 1) implement the interface, 2) write tests that verify each "Must Do" item, 3) write tests for each "Edge Case"
+- Tests validate contract/behavior, not implementation details
+- Remove all phase tracking state from SpecPhaseRunner
+- Update gui_viewer.py to call single phase instead of phase loop
+- Update dispatch/handler.py if it references phase methods
 
 ## Must Not Do
-- Modify the original string
-- Raise exceptions on valid input
+- Do not generate tests before implementation exists
+- Do not invent test cases beyond what spec defines
+- Do not break prose mode (non-spec) dispatch flow
+- Do not modify TaskTracker or task contracts
 
 ## Edge Cases
-- Empty string → return empty string
-- Single character → return same character
-- Unicode characters → preserve correctly
-
-## Preconditions
-- Input is a string
-
-## Postconditions
-- Output length equals input length
-- Output is reversed input
+- Spec with empty "Edge Cases" section → still generate tests for "Must Do" items only
+- Spec with no "Must Do" section → validation should catch this (already handled by validator)
+- GUI closes mid-execution → same handling as current (process cleanup)
 
 ## Validation
-- Tests: pytest tests/utils/test_string_reverser.py -v
+- Tests: pytest tests/ -v
 
 ## Target Path
-src/utils/string_reverser.py
+src/specs/
 
 ## YOUR TASK
 
-Implement the specification at: `src/utils/string_reverser.py`
+Implement the specification at: `src/specs/`
 
 Implementation Rules:
 1. Follow interface signatures EXACTLY
@@ -82,6 +84,6 @@ Implementation Rules:
 5. Ensure postconditions are satisfied
 
 Run the tests and iterate until all pass.
-Test command: pytest tests/utils/test_string_reverser.py -v
+Test command: pytest tests/ -v
 
 Write clean, scalable, modular, efficient code. Follow single responsibility principle. Do not repeat yourself. Use consistent naming conventions. No unnecessary comments.
