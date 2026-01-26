@@ -13,10 +13,7 @@ from mcp.types import Tool, TextContent
 SYSTEM_PROMPT = (
     "Write clean, scalable, modular, efficient code. "
     "Follow single responsibility principle. Do not repeat yourself. "
-    "Use consistent naming conventions. No unnecessary comments.\n\n"
-    "DOCUMENTATION: If docs/STRUCT.md exists, update it with your changes. "
-    "If it doesn't exist, create docs/STRUCT.md. Include: project purpose, architecture overview, "
-    "key files/components, and a brief changelog of what you just did. Keep it concise."
+    "Use consistent naming conventions. No unnecessary comments."
 )
 
 
