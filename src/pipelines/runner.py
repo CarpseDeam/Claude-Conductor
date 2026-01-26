@@ -2,6 +2,8 @@
 
 import subprocess
 import logging
+import tempfile
+import os
 from pathlib import Path
 
 from .config import PipelineConfig, PipelineStep
@@ -44,20 +46,7 @@ class PipelineRunner:
     def _dispatch_step(self, step: PipelineStep, diff: str) -> None:
         """Dispatch pipeline step to agent. Non-blocking."""
         task = step.task_template.format(diff=diff)
-
         cli_cmd = CLI_COMMANDS.get(step.agent, "gemini")
-
-        if step.agent == "gemini":
-            cmd = [cli_cmd, "--approval-mode", "yolo"]
-            if step.model:
-                cmd.extend(["-m", step.model])
-            cmd.append(task)
-            shell = False
-        else:
-            cmd = f"{cli_cmd} -p"
-            if step.model:
-                cmd += f" -m {step.model}"
-            shell = True
 
         logger.info(f"Dispatching pipeline '{step.name}' to {step.agent}")
 
@@ -68,16 +57,30 @@ class PipelineRunner:
             except AttributeError:
                 pass
 
+            with tempfile.NamedTemporaryFile(
+                mode='w', suffix='.txt', delete=False, encoding='utf-8'
+            ) as f:
+                f.write(task)
+                prompt_file = f.name
+
             if step.agent == "gemini":
-                process = subprocess.Popen(
+                cmd = f'type "{prompt_file}" | gemini --approval-mode yolo'
+                if step.model:
+                    cmd += f' -m {step.model}'
+
+                subprocess.Popen(
                     cmd,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                     cwd=str(self.project_path),
-                    shell=False,
+                    shell=True,
                     creationflags=creationflags
                 )
             else:
+                cmd = f"{cli_cmd} -p"
+                if step.model:
+                    cmd += f" -m {step.model}"
+
                 process = subprocess.Popen(
                     cmd,
                     stdin=subprocess.PIPE,
@@ -90,5 +93,11 @@ class PipelineRunner:
                 )
                 process.stdin.write(task)
                 process.stdin.close()
+
+                try:
+                    os.unlink(prompt_file)
+                except OSError:
+                    pass
+
         except Exception as e:
             logger.error(f"Pipeline dispatch failed: {e}")
