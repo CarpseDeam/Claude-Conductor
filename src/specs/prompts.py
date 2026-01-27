@@ -8,6 +8,14 @@ class SpecPromptBuilder:
 
     MAX_ITERATIONS: int = 5
 
+    def __init__(self, language: str = "python") -> None:
+        """Initialize builder with detected language.
+
+        Args:
+            language: The detected project language (e.g., "python", "gdscript").
+        """
+        self.language = language
+
     def build_prompt(self, spec: SpecDocument) -> str:
         """Build unified prompt for single-phase spec execution.
 
@@ -88,13 +96,11 @@ class SpecPromptBuilder:
                 "- Write one test for each edge case specified",
             ])
 
+        test_guidance = self._get_test_guidance(self.language)
         sections.extend([
             "",
             "Test Code Requirements:",
-            "- Use pytest fixtures for shared setup",
-            "- Include full type hints",
-            "- Use descriptive test names",
-            "- Keep tests focused and independent",
+            test_guidance,
             "",
             "### Step 3: Validate",
             "",
@@ -105,6 +111,33 @@ class SpecPromptBuilder:
         ])
 
         return "\n".join(sections)
+
+    def _get_test_guidance(self, language: str) -> str:
+        """Return test framework guidance based on language.
+
+        Args:
+            language: The detected project language.
+
+        Returns:
+            Test framework guidance string for the prompt.
+        """
+        if language == "gdscript":
+            return (
+                "- Use GUT (Godot Unit Test) framework\n"
+                "- Test class extends GutTest\n"
+                "- Use assert_eq(), assert_true(), assert_false(), assert_null()\n"
+                "- Use before_each() and after_each() for setup/teardown\n"
+                "- Test files: res://tests/test_*.gd\n"
+                "- Use descriptive test names (test_player_takes_damage)\n"
+                "- Keep tests focused and independent"
+            )
+        else:
+            return (
+                "- Use pytest fixtures for shared setup\n"
+                "- Include full type hints\n"
+                "- Use descriptive test names\n"
+                "- Keep tests focused and independent"
+            )
 
     def _get_tier_guidance(self, tier: SpecTier) -> str:
         """Return tier-specific guidance for test depth."""

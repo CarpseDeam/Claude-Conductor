@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
+from mapper.detector import StackDetector
 from specs import SpecParser, SpecPromptBuilder
 from specs.runner import SpecPhaseRunner
 
@@ -31,7 +32,7 @@ class DispatchHandler:
 
     def __init__(self) -> None:
         self.spec_parser = SpecParser()
-        self.prompt_builder = SpecPromptBuilder()
+        self.stack_detector = StackDetector()
 
     def prepare(
         self,
@@ -48,7 +49,8 @@ class DispatchHandler:
         if mode == DispatchMode.SPEC:
             spec = self.spec_parser.parse(content)
             spec_name = spec.name
-            phase_runner = SpecPhaseRunner(spec, project_path)
+            stack = self.stack_detector.detect(project_path)
+            phase_runner = SpecPhaseRunner(spec, project_path, language=stack.language)
 
         return DispatchRequest(
             content=content,

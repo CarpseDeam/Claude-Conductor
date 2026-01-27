@@ -44,13 +44,29 @@ class StackDetector:
     }
 
     def detect(self, project_path: Path) -> StackInfo:
-        """Detect stack from config files. Fast: only reads configs."""
+        """Detect stack from config files. Fast: only reads configs.
+
+        Godot projects (project.godot) take priority over Python projects
+        when both exist, as Godot is the primary project type.
+        """
         language = "unknown"
         frameworks: list[str] = []
         tools: list[str] = []
         package_manager: str | None = None
 
+        # Check for Godot first (priority over other languages)
+        godot_path = project_path / "project.godot"
+        if godot_path.exists():
+            return StackInfo(
+                language="gdscript",
+                frameworks=[],
+                tools=[],
+                package_manager=None,
+            )
+
         for config_file, (lang, signals) in self.CONFIG_SIGNALS.items():
+            if config_file == "project.godot":
+                continue  # Already handled above
             config_path = project_path / config_file
             if config_path.exists():
                 language = lang

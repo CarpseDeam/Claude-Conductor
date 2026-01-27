@@ -274,14 +274,75 @@ class ClaudeCodeMCPServer:
         frameworks = ", ".join(stack.frameworks) if stack.frameworks else "None"
         tools = ", ".join(stack.tools) if stack.tools else "None"
 
-        content = f"""# Project: {codebase_map.project_name}
+        if stack.language == "gdscript":
+            content = self._generate_godot_steering(codebase_map, stack, frameworks, tools, project_path)
+        else:
+            content = self._generate_python_steering(codebase_map, stack, frameworks, tools, project_path)
+
+        steering_file = claude_dir / "steering.md"
+        steering_file.write_text(content, encoding="utf-8")
+
+    def _generate_godot_steering(self, codebase_map, stack, frameworks: str, tools: str, project_path: Path) -> str:
+        """Generate steering file content for Godot projects."""
+        gut_addon = project_path / "addons" / "gut"
+        gut_note = ""
+        if not gut_addon.exists():
+            gut_note = "\n- NOTE: GUT addon not found. Install from AssetLib or https://github.com/bitwes/Gut"
+
+        return f"""# Project: {codebase_map.project_name}
 
 ## Stack
 - Language: {stack.language}
 - Frameworks: {frameworks}
 - Tools: {tools}
 
+## Environment
+- Engine: Godot 4.x
+- Test framework: GUT (Godot Unit Test)
+- Run tests: `godot --headless -s addons/gut/gut_cmdline.gd -gdir=res://tests/ -gexit`{gut_note}
+
 ## Code Standards
+- New files: aim 200-300 lines, split at 400
+- Existing files: don't refactor unless >500 lines
+- Max function size: 25 lines (40+ ok if one clear purpose)
+- Use static typing (var x: int, func foo() -> void)
+- Use class_name for reusable classes
+- Use signals for decoupled communication
+
+## Testing
+- GUT for all tests
+- Test file mirrors source: scripts/player.gd → tests/test_player.gd
+- Test files: res://tests/test_*.gd
+"""
+
+    def _generate_python_steering(self, codebase_map, stack, frameworks: str, tools: str, project_path: Path) -> str:
+        """Generate steering file content for Python projects."""
+        venv_section = ""
+        venv_path = project_path / ".venv"
+        if venv_path.exists():
+            if (venv_path / "Scripts").exists():  # Windows
+                venv_section = """## Environment
+- Virtual env: `.venv` (Windows)
+- Python: `.venv/Scripts/python.exe`
+- Run tests: `.venv/Scripts/python.exe -m pytest tests/ -v`
+- Install deps: `.venv/Scripts/pip.exe install <pkg>`
+"""
+            else:  # Unix
+                venv_section = """## Environment
+- Virtual env: `.venv`
+- Python: `.venv/bin/python`
+- Run tests: `.venv/bin/python -m pytest tests/ -v`
+- Install deps: `.venv/bin/pip install <pkg>`
+"""
+
+        return f"""# Project: {codebase_map.project_name}
+
+## Stack
+- Language: {stack.language}
+- Frameworks: {frameworks}
+- Tools: {tools}
+
+{venv_section}## Code Standards
 - New files: aim 200-300 lines, split at 400
 - Existing files: don't refactor unless >500 lines
 - Working god files: leave alone (one responsibility > line count)
@@ -295,8 +356,6 @@ class ClaudeCodeMCPServer:
 - No mocks unless external service
 - Test file mirrors source: src/foo.py → tests/test_foo.py
 """
-        steering_file = claude_dir / "steering.md"
-        steering_file.write_text(content, encoding="utf-8")
 
     def _handle_dispatch_assimilate(self, arguments: dict) -> list[TextContent]:
         """Handle dispatch_assimilate tool call - deprecated."""

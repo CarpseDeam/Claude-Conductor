@@ -404,12 +404,12 @@ class ClaudeOutputWindow:
 
     def _detect_command_type(self, cmd: str) -> CommandType | None:
         """Detect if a bash command is a validation command."""
-        cmd_lower = cmd.lower()
-        if "pytest" in cmd_lower:
+        cmd_lower = cmd.lower().strip()
+        if cmd_lower.startswith("pytest") or " -m pytest" in cmd_lower:
             return CommandType.PYTEST
-        elif "mypy" in cmd_lower:
+        elif cmd_lower.startswith("mypy") or " -m mypy" in cmd_lower:
             return CommandType.MYPY
-        elif any(x in cmd_lower for x in ["ruff", "flake8", "lint"]):
+        elif any(cmd_lower.startswith(x) for x in ["ruff", "flake8"]) or "lint" in cmd_lower:
             return CommandType.LINT
         return None
 

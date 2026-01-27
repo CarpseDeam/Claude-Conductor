@@ -15,12 +15,12 @@ class SpecPhaseRunner:
     Single phase: implement first, then write tests to verify.
     """
 
-    def __init__(self, spec: SpecDocument, project_path: Path) -> None:
+    def __init__(self, spec: SpecDocument, project_path: Path, language: str = "python") -> None:
         if spec is None:
             raise TypeError("spec cannot be None")
         self.spec = spec
         self.project_path = project_path
-        self.prompt_builder = SpecPromptBuilder()
+        self.prompt_builder = SpecPromptBuilder(language=language)
 
     def get_request(self) -> PhaseRequest:
         """Get request for unified spec execution.
