@@ -54,8 +54,7 @@ class ClaudeOutputWindow:
 
     def __init__(self, project_path: str, prompt: str, additional_dirs: list = None,
                  prompt_file: str = None, cli: str = "claude", model: str = None,
-                 git_branch: str = None, godot_project: str = None, task_id: str = None,
-                 spec_mode: bool = False):
+                 git_branch: str = None, godot_project: str = None, task_id: str = None):
         self._project_path = project_path
         self._prompt = prompt
         self._additional_dirs = additional_dirs or []
@@ -66,7 +65,6 @@ class ClaudeOutputWindow:
         self._git_branch = git_branch
         self._godot_project = godot_project
         self._task_id = task_id
-        self._spec_mode = spec_mode
         self._process = None
         self._stats = self._init_stats()
         self._last_tool_type = None
@@ -150,10 +148,6 @@ class ClaudeOutputWindow:
         self._status.config(text=text, fg=color)
     
     def _run_claude(self):
-        if self._spec_mode:
-            self._root.after(0, lambda: self._root.title(
-                f"Spec Mode - {Path(self._project_path).name}"
-            ))
         success = self._run_single_phase(self._prompt)
         self._root.after(0, self._show_summary)
         if success:
@@ -671,7 +665,7 @@ class ClaudeOutputWindow:
 
 def main():
     if len(sys.argv) < 3:
-        print("Usage: gui_viewer.py <project_path> <prompt_file> [--add-dir <path>]... [--cli claude|gemini|codex] [--model <model>] [--git-branch <n>] [--godot-project <path>] [--task-id <id>] [--spec-mode]")
+        print("Usage: gui_viewer.py <project_path> <prompt_file> [--add-dir <path>]... [--cli claude|gemini|codex] [--model <model>] [--git-branch <n>] [--godot-project <path>] [--task-id <id>]")
         sys.exit(1)
 
     project_path = sys.argv[1]
@@ -683,7 +677,6 @@ def main():
     git_branch = None
     godot_project = None
     task_id = None
-    spec_mode = False
 
     i = 3
     while i < len(sys.argv):
@@ -705,9 +698,6 @@ def main():
         elif sys.argv[i] == "--task-id" and i + 1 < len(sys.argv):
             task_id = sys.argv[i + 1]
             i += 2
-        elif sys.argv[i] == "--spec-mode":
-            spec_mode = True
-            i += 1
         else:
             i += 1
 
@@ -715,7 +705,7 @@ def main():
 
     window = ClaudeOutputWindow(
         project_path, prompt, additional_dirs, prompt_file, cli, model,
-        git_branch, godot_project, task_id, spec_mode
+        git_branch, godot_project, task_id
     )
     window.run()
 

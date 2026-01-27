@@ -69,11 +69,39 @@ class DispatchGuard:
         self._recent_dispatches[content_hash] = (task_id, time.time())
 
 
-SYSTEM_PROMPT = (
-    "Write clean, scalable, modular, efficient code. "
-    "Follow single responsibility principle. Do not repeat yourself. "
-    "Use consistent naming conventions. No unnecessary comments."
-)
+SYSTEM_PROMPT = """## Code Standards
+
+Write code that looks inevitable. Follow these constraints:
+
+**Restraint**
+- Solve it in one file if possible
+- No abstractions until the third time you need them
+- No classes if functions will do
+- No inheritance - use composition
+
+**Functions**
+- Max 25 lines, aim for 15
+- One level of nesting max
+- Name describes exactly what it does: `extract_billable_hours()` not `process_data()`
+- Input → transform → output. No side effects unless that's the point.
+
+**Files**
+- Max 200 lines for new files
+- One clear responsibility
+- If you're adding a second "system" to a file, stop and split
+
+**No Ceremony**
+- No AbstractFactory, no IServiceProvider, no Manager classes
+- No code "just in case" - solve the actual problem
+- Delete commented-out code, don't keep it
+
+**Data**
+- Use dataclasses or plain dicts, not classes with only __init__ and getters
+- Data flows obviously - reader should predict what happens next
+- No global state
+
+The best code is code you delete. Every line is a liability.
+"""
 
 
 class ClaudeCodeMCPServer:
@@ -130,41 +158,13 @@ class ClaudeCodeMCPServer:
             ),
             Tool(
                 name="dispatch",
-                description=(
-                    "Dispatch a coding task to CLI agent. Auto-detects mode from content:\n\n"
-                    "**SPEC MODE (preferred for features):** Content starts with '## Spec:' triggers spec-driven execution:\n"
-                    "- Agent implements the interface first\n"
-                    "- Agent writes tests that verify each Must Do and Edge Case\n"
-                    "- Tests validate contract/behavior, not implementation details\n\n"
-                    "Spec format:\n"
-                    "```\n"
-                    "## Spec: FeatureName [TIER]\n"
-                    "Brief description.\n\n"
-                    "### Interface\n"
-                    "- `ClassName.method(params) -> ReturnType` — Description\n\n"
-                    "### Must Do\n"
-                    "- Required behaviors\n\n"
-                    "### Must Not Do\n"
-                    "- Forbidden behaviors\n\n"
-                    "### Edge Cases\n"
-                    "- Edge case → expected behavior\n\n"
-                    "### Target Path\n"
-                    "src/module.py\n\n"
-                    "### Validation\n"
-                    "```yaml\n"
-                    "tests: pytest tests/ -v\n"
-                    "```\n"
-                    "```\n\n"
-                    "TIERS: HOTFIX (minimal), FEATURE (standard), SYSTEM (comprehensive)\n\n"
-                    "**PROSE MODE:** For bug fixes, refactors, exploratory work. Just describe what to do.\n\n"
-                    "USE SPEC MODE for any non-trivial feature. USE PROSE MODE only for simple fixes."
-                ),
+                description="Dispatch a coding task to CLI agent. Describe what you want done.",
                 inputSchema={
                     "type": "object",
                     "properties": {
                         "content": {
                             "type": "string",
-                            "description": "Task content. Start with '## Spec:' for spec-driven mode (preferred for features)."
+                            "description": "Task description."
                         },
                         "project_path": {
                             "type": "string",
@@ -369,7 +369,7 @@ class ClaudeCodeMCPServer:
 
     def _handle_dispatch(self, arguments: dict) -> list[TextContent]:
         """Handle unified dispatch tool call."""
-        from dispatch import DispatchHandler, DispatchMode
+        from dispatch import DispatchHandler
 
         content = arguments["content"]
         project_path = arguments["project_path"]
@@ -388,21 +388,12 @@ class ClaudeCodeMCPServer:
             return [TextContent(type="text", text=json.dumps(blocking, indent=2))]
 
         handler = DispatchHandler()
-        try:
-            request = handler.prepare(content, Path(project_path), cli, model)
-        except ValueError as e:
-            return [TextContent(type="text", text=f"Spec parse error: {e}")]
+        request = handler.prepare(content, Path(project_path), cli, model)
 
         full_prompt = handler.build_prompt(request, SYSTEM_PROMPT)
 
         task_id = tracker.create_task(project_path, cli)
         self._dispatch_guard.record_dispatch(content, task_id)
-
-        if request.spec_name:
-            record = tracker.get_task(task_id)
-            if record:
-                record.spec_name = request.spec_name
-                tracker._save(record)
 
         prompt_file = Path(project_path) / "_dispatch_prompt.txt"
         prompt_file.write_text(full_prompt, encoding='utf-8')
@@ -414,9 +405,6 @@ class ClaudeCodeMCPServer:
         cmd.extend(["--cli", cli])
         if model:
             cmd.extend(["--model", model])
-
-        if request.mode == DispatchMode.SPEC:
-            cmd.append("--spec-mode")
 
         subprocess.Popen(
             cmd,
@@ -430,14 +418,10 @@ class ClaudeCodeMCPServer:
         response = {
             "status": "launched",
             "task_id": task_id,
-            "mode": request.mode.value,
             "cli": cli_names.get(cli, cli),
             "model": model or "default",
             "project_path": project_path,
         }
-
-        if request.spec_name:
-            response["spec_name"] = request.spec_name
 
         response["message"] = (
             "Task launched. DO NOT call get_task_result - wait for user to confirm completion."
