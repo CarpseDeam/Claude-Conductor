@@ -4,59 +4,61 @@
 
 ## Structure
 
-- `docs/` - Documentation (0 files)
-- `src/` - Source code (0 files)
-- `src/dispatch/` - Project files (0 files)
-- `src/git/` - Project files (0 files)
-- `src/mapper/` - Project files (0 files)
-- `src/output/` - Project files (0 files)
-- `src/pipelines/` - Project files (0 files)
-- `src/specs/` - Project files (0 files)
-- `src/tasks/` - Project files (0 files)
-- `src/utils/` - Utilities (0 files)
-- `tests/` - Tests (0 files)
-- `tests/output/` - Project files (0 files)
-- `tests/specs/` - Project files (0 files)
+- `.claude/` - Project-level steering (1 file)
+- `docs/` - Documentation (4 files)
+- `src/` - Source code (3 files)
+- `src/dispatch/` - Task dispatch logic (2 files)
+- `src/git/` - Git operations and workflows (5 files)
+- `src/mapper/` - Codebase mapping and detection (5 files)
+- `src/output/` - Output compression and masking (2 files)
+- `src/pipelines/` - Background automation (4 files)
+- `src/specs/` - Spec-driven development engine (6 files)
+- `src/tasks/` - Task tracking and persistence (3 files)
+- `src/utils/` - Utility functions (2 files)
+- `tests/` - Test suite
 
 ## Key Files
 
-- `src\server.py` - Server entry
-- `src\pipelines\config.py` - Configuration
-- `src\git\contracts.py` - Data contracts
-- `src\specs\contracts.py` - Data contracts
-- `src\tasks\contracts.py` - Data contracts
-- `pyproject.toml` - Project config
+- `.claude\steering.md` - Project standards and stack info (Auto-generated)
+- `src\server.py` - MCP Server entry and Steering generation
+- `src\mapper\detector.py` - Stack and language detection (Python, Godot)
+- `src\dispatch\handler.py` - Task dispatch orchestration
+- `src\specs\prompts.py` - Language-aware prompt templates
+- `src\specs\runner.py` - Unified spec execution runner
+- `src\gui_viewer.py` - Streaming output and command detection
+- `pyproject.toml` - Project configuration
 - `README.md` - Documentation
 
 ## Module Details
 
 ### `src\server.py`
-**DispatchGuard**: check_running_task, check_duplicate, record_dispatch
-**ClaudeCodeMCPServer**: run
-**Functions**: `main()`
+_MCP Server entry and project steering._
 
-### `src\pipelines\config.py`
-_Pipeline configuration management._
+**ClaudeCodeMCPServer**: `_generate_godot_steering`, `_generate_python_steering`
+**DispatchGuard**: `check_running_task`, `check_duplicate`, `record_dispatch`
 
-**PipelineConfig**: load, save
+### `src\mapper\detector.py`
+_Language and stack detection logic._
 
-### `src\specs\contracts.py`
-_Spec-driven development contracts and data structures._
+**StackDetector**: `detect(project_path)` - Now supports Godot (GDScript) priority detection.
 
-**SpecDocument**: to_prompt_context
+### `src\specs\prompts.py`
+_Language-aware prompt templates for spec-driven development._
 
-### `src\tasks\contracts.py`
-_Data contracts for task tracking._
+**SpecPromptBuilder**: `_get_test_guidance(language)` - Provides framework-specific instructions (GUT/pytest).
 
-**TaskRecord**: to_dict, from_dict
+### `src\specs\runner.py`
+_Orchestrates spec execution with language context._
 
+**SpecPhaseRunner**: Now initialized with project `language`.
 
-## Entry Points
+### `src\gui_viewer.py`
+_Real-time output viewer with enhanced command detection._
 
-- **New test:** tests/
+**Functions**: `_detect_command_type(cmd)` - Robust detection for pytest, mypy, and linting.
 
 ## Stats
 
-- Files: 7
+- Files: ~45
 - Directories: 13
-- Lines: 973
+- Lines: ~4000

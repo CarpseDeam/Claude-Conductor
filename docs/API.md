@@ -4,9 +4,9 @@
 
 ### get_manifest
 
-Get strategic overview of a codebase. Call this FIRST before coding tasks. Returns: project structure, stack detection (language/frameworks/tools), key files with parsed Python content including class names, method signatures, and function signatures. 
+Get strategic overview of a codebase. Call this FIRST before coding tasks. Returns: project structure, stack detection (language/frameworks/tools), key files with parsed content. 
 
-**Side Effects:** Generates or updates `.claude/steering.md` in the target project, which contains stack information and project-specific coding standards to guide agents.
+**Side Effects:** Generates or updates `.claude/steering.md` in the target project, which contains stack information and project-specific coding standards to guide agents. Supports both Python and Godot (GDScript) environments.
 
 Helps understand where code lives and what interfaces exist. Cached to docs/STRUCT.md; use refresh=true to regenerate after changes.
 
@@ -54,9 +54,9 @@ _Data models for the user service._
 ### dispatch
 
 Dispatch coding task to CLI agent. Auto-detects mode from content:
-- **SPEC MODE (preferred for features)**: Content starts with `## Spec:` → Triggers spec-driven execution:
+- **SPEC MODE (preferred for features)**: Content starts with `## Spec:` → Triggers language-aware spec-driven execution:
   - Agent implements the interface first
-  - Agent writes tests that verify each Must Do and Edge Case
+  - Agent writes tests that verify each Must Do and Edge Case using framework-specific guidance (e.g. GUT for Godot, pytest for Python)
   - Tests validate contract/behavior, not implementation details
 - **PROSE MODE**: For bug fixes, refactors, exploratory work. Just describe what to do.
 

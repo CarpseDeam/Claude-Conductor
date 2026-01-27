@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+- 2026-01-27: feat: add Godot (GDScript) support with GUT test framework integration
+- 2026-01-27: feat: implement language-aware steering file generation with specific standards for Python and Godot
+- 2026-01-27: feat: enhance Python steering with automatic virtual environment detection and OS-specific commands
+- 2026-01-27: feat: add language-specific test guidance to spec prompts (GUT for Godot, pytest for Python)
+- 2026-01-27: fix: improve robustness of command type detection in GUI viewer
+- 2026-01-27: refactor: update SpecPhaseRunner and SpecPromptBuilder to be language-aware
 - 2026-01-26: docs: update API.md to reflect single-phase spec execution and new health_check tool
 - 2026-01-26: refactor: unify two-phase spec execution into a single-phase (implement then test) workflow
 - 2026-01-26: feat: auto-fail stale tasks in DispatchGuard after 10 minutes

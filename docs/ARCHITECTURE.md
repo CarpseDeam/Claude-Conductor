@@ -21,17 +21,12 @@ Generates compressed project manifests for Desktop context efficiency. Optimized
 ```
 mapper/
 ├── mapper.py            # Main mapping logic (shallow walk + key files)
-├── detector.py          # Language and stack detection
+├── detector.py          # Language and stack detection (Python, Godot)
 ├── parser.py            # AST-based Python module analysis
 └── git_info.py          # Git history extraction (utility)
 ```
 
-The mapper extracts high-level metadata from key Python modules:
-- **Module-level docstrings** for purpose identification.
-- **Class structures** and **Method signatures**.
-- **Function signatures** with type hints.
-
-To maintain sub-second latency, Git context (history/uncommitted changes) is excluded from the default mapping flow.
+The mapper extracts high-level metadata from key Python modules (or project configuration for Godot). The `StackDetector` prioritized Godot (`project.godot`) to ensure proper steering and testing guidance for game projects.
 
 ### GUI Viewer (`src/gui_viewer.py`)
 
@@ -53,8 +48,9 @@ Tracks dispatched tasks and results:
 Handles executable specification parsing and prompt building:
 - Parses compact markdown specs (Interface, Must Do, Edge Cases)
 - **Validation**: Provides `validate_spec` for non-throwing verification of spec format and requirements.
+- **Language Awareness**: `SpecPhaseRunner` and `SpecPromptBuilder` are language-aware, allowing for tailored guidance based on the detected project stack (e.g., Godot vs Python).
 - **Single-Phase Execution**: Implements a unified workflow managed by `SpecPhaseRunner`:
-  - **Unified Prompt**: A single prompt instructs the agent to 1) implement the interface, then 2) write tests to verify all requirements.
+  - **Unified Prompt**: A single prompt instructs the agent to 1) implement the interface, then 2) write tests to verify all requirements. Provides tailored framework-specific instructions (e.g., GUT for Godot, pytest for Python).
   - **TDD Workflow**: Maintains TDD principles by requiring tests that validate the contract and behavior.
 - **Spec-First Strategy**: Instructs agents to treat the specification as the source of truth, minimizing unnecessary codebase exploration to ensure strict adherence to the defined interface.
 - **Circuit Breaker**: Implements an 8-read limit for specification-based tasks. If an agent makes more than 8 file reads without writing code, it is forced to stop exploration and begin implementation based on the spec.
