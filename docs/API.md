@@ -118,6 +118,15 @@ Get the result of a dispatched coding task. ONLY call this when user explicitly 
   "cli_output": "... full agent output ..."
 }
 ```
+or (on failure):
+```json
+{
+  "task_id": "a1b2c3d4",
+  "status": "failed",
+  "error": "Window closed before completion",
+  "duration_seconds": 45
+}
+```
 
 ---
 

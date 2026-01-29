@@ -44,6 +44,11 @@ _Real-time output viewer with enhanced command detection._
 
 **Functions**: `_detect_command_type(cmd)` - Robust detection for pytest, mypy, and linting.
 
+### `src\tasks\tracker.py`
+_Task tracking and persistence._
+
+**TaskTracker**: `create_task`, `complete_task`, `fail_task`, `get_task`, `get_recent_tasks`
+
 ## Stats
 
 - Files: ~45
