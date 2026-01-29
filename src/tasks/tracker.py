@@ -33,7 +33,7 @@ class TaskTracker:
         """Mark task as completed with results."""
         record = self.get_task(task_id)
         if not record:
-            return
+            raise ValueError(f"Task {task_id} not found")
         record.status = TaskStatus.COMPLETED
         record.completed_at = datetime.now()
         record.files_modified = files_modified
@@ -45,7 +45,7 @@ class TaskTracker:
         """Mark task as failed."""
         record = self.get_task(task_id)
         if not record:
-            return
+            raise ValueError(f"Task {task_id} not found")
         record.status = TaskStatus.FAILED
         record.completed_at = datetime.now()
         record.error = error

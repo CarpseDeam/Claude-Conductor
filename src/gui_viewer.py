@@ -581,7 +581,8 @@ class ClaudeOutputWindow:
             cli_output = "".join(self._stats.get("cli_output", []))[-500:]
             tracker.complete_task(self._task_id, files_modified, summary, cli_output)
         except Exception as e:
-            logger.warning(f"Failed to report task completion: {e}")
+            error_msg = f"⚠ Task report failed: {e}"
+            self._root.after(0, lambda: self._set_status(error_msg, "#FF6600"))
 
     def _report_task_failure(self, error: str) -> None:
         """Report task failure to tracker."""
@@ -593,7 +594,8 @@ class ClaudeOutputWindow:
             tracker = TaskTracker()
             tracker.fail_task(self._task_id, error)
         except Exception as e:
-            logger.warning(f"Failed to report task failure: {e}")
+            error_msg = f"⚠ Task report failed: {e}"
+            self._root.after(0, lambda: self._set_status(error_msg, "#FF6600"))
 
     def _build_summary(self) -> str:
         """Build summary string from stats."""

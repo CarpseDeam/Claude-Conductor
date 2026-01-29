@@ -34,7 +34,7 @@ Real-time streaming output window:
 - Parses stream-json from CLI agents
 - Color-coded tool calls (READ=cyan, EDIT=gold, BASH=gold)
 - Summary panel with stats
-- **Task Lifecycle**: Reports completion to Task Tracker and triggers automatic Git commit on success.
+- **Task Lifecycle**: Reports completion to Task Tracker and triggers automatic Git commit on success. Reports failure if the window is closed before the task finishes.
 
 ### Task Tracker (`src/tasks/`)
 

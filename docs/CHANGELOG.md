@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+- 2026-01-29: fix: report task failure in GUI viewer if window is closed before completion
+- 2026-01-29: refactor: increase Claude CLI max-turns to 50 to support longer-running tasks
 - 2026-01-27: refactor: remove Spec Mode and `src/specs` module in favor of unified code standards in system prompt
 - 2026-01-27: feat: add Godot (GDScript) support with GUT test framework integration
 - 2026-01-27: feat: implement language-aware steering file generation with specific standards for Python and Godot
