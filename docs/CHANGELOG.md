@@ -6,6 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+- 2026-01-27: refactor: remove Spec Mode and `src/specs` module in favor of unified code standards in system prompt
 - 2026-01-27: feat: add Godot (GDScript) support with GUT test framework integration
 - 2026-01-27: feat: implement language-aware steering file generation with specific standards for Python and Godot
 - 2026-01-27: feat: enhance Python steering with automatic virtual environment detection and OS-specific commands

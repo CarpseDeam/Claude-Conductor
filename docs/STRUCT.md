@@ -12,7 +12,6 @@
 - `src/mapper/` - Codebase mapping and detection (5 files)
 - `src/output/` - Output compression and masking (2 files)
 - `src/pipelines/` - Background automation (4 files)
-- `src/specs/` - Spec-driven development engine (6 files)
 - `src/tasks/` - Task tracking and persistence (3 files)
 - `src/utils/` - Utility functions (2 files)
 - `tests/` - Test suite
@@ -23,8 +22,6 @@
 - `src\server.py` - MCP Server entry and Steering generation
 - `src\mapper\detector.py` - Stack and language detection (Python, Godot)
 - `src\dispatch\handler.py` - Task dispatch orchestration
-- `src\specs\prompts.py` - Language-aware prompt templates
-- `src\specs\runner.py` - Unified spec execution runner
 - `src\gui_viewer.py` - Streaming output and command detection
 - `pyproject.toml` - Project configuration
 - `README.md` - Documentation
@@ -41,16 +38,6 @@ _MCP Server entry and project steering._
 _Language and stack detection logic._
 
 **StackDetector**: `detect(project_path)` - Now supports Godot (GDScript) priority detection.
-
-### `src\specs\prompts.py`
-_Language-aware prompt templates for spec-driven development._
-
-**SpecPromptBuilder**: `_get_test_guidance(language)` - Provides framework-specific instructions (GUT/pytest).
-
-### `src\specs\runner.py`
-_Orchestrates spec execution with language context._
-
-**SpecPhaseRunner**: Now initialized with project `language`.
 
 ### `src\gui_viewer.py`
 _Real-time output viewer with enhanced command detection._

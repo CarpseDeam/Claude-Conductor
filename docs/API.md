@@ -53,24 +53,17 @@ _Data models for the user service._
 
 ### dispatch
 
-Dispatch coding task to CLI agent. Auto-detects mode from content:
-- **SPEC MODE (preferred for features)**: Content starts with `## Spec:` → Triggers language-aware spec-driven execution:
-  - Agent implements the interface first
-  - Agent writes tests that verify each Must Do and Edge Case using framework-specific guidance (e.g. GUT for Godot, pytest for Python)
-  - Tests validate contract/behavior, not implementation details
-- **PROSE MODE**: For bug fixes, refactors, exploratory work. Just describe what to do.
+Dispatch coding task to CLI agent. Describe what you want done in the content parameter.
 
 **Concurrency & Deduplication:**
 The server uses a `DispatchGuard` to prevent:
 1. **Concurrent Tasks**: Only one task can run per `project_path` at a time. Tasks running longer than 10 minutes are automatically failed as stale.
 2. **Duplicate Dispatches**: Identical content hashes are blocked for 5 minutes.
 
-USE SPEC MODE for any non-trivial feature. USE PROSE MODE only for simple fixes.
-
 **Parameters:**
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `content` | string | Yes | Task content. Start with `## Spec:` for spec-driven mode (preferred for features). |
+| `content` | string | Yes | Task description. |
 | `project_path` | string | Yes | Absolute path to project directory |
 | `cli` | string | No | "claude", "gemini", or "codex" (default: "claude") |
 | `model` | string | No | Model override |
@@ -80,7 +73,6 @@ USE SPEC MODE for any non-trivial feature. USE PROSE MODE only for simple fixes.
 {
   "status": "launched",
   "task_id": "a1b2c3d4",
-  "mode": "spec",
   "cli": "Claude Code",
   "project_path": "C:\\Projects\\my-api",
   "message": "Task launched. DO NOT call get_task_result - wait for user to confirm completion."

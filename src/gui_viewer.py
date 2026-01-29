@@ -21,7 +21,7 @@ GODOT_EXE = r"C:\Users\carps\OneDrive\Desktop\Godot.exe"
 
 CLI_CONFIGS = {
     "claude": {
-        "cmd": "claude -p --permission-mode dontAsk --output-format stream-json --include-partial-messages --verbose --max-turns 25 --dangerously-skip-permissions",
+        "cmd": "claude -p --permission-mode dontAsk --output-format stream-json --include-partial-messages --verbose --max-turns 50 --dangerously-skip-permissions",
         "add_dir_flag": "--add-dir",
         "model_flag": "--model",
         "title": "Claude Code",
@@ -65,6 +65,7 @@ class ClaudeOutputWindow:
         self._git_branch = git_branch
         self._godot_project = godot_project
         self._task_id = task_id
+        self._task_reported: bool = False
         self._process = None
         self._stats = self._init_stats()
         self._last_tool_type = None
@@ -571,6 +572,7 @@ class ClaudeOutputWindow:
         """Report task completion to tracker."""
         if not self._task_id:
             return
+        self._task_reported = True
         try:
             from tasks.tracker import TaskTracker
             tracker = TaskTracker()
@@ -585,6 +587,7 @@ class ClaudeOutputWindow:
         """Report task failure to tracker."""
         if not self._task_id:
             return
+        self._task_reported = True
         try:
             from tasks.tracker import TaskTracker
             tracker = TaskTracker()
@@ -647,6 +650,10 @@ class ClaudeOutputWindow:
     def _on_close(self):
         if self._process and self._process.poll() is None:
             self._process.terminate()
+
+        if self._task_id and not self._task_reported:
+            self._report_task_failure("Window closed before task completed")
+
         self._cleanup_prompt_file()
         self._root.destroy()
     

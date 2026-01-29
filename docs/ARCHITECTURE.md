@@ -43,20 +43,6 @@ Tracks dispatched tasks and results:
 - GUI reports completion
 - Desktop queries results
 
-### Spec Engine (`src/specs/`)
-
-Handles executable specification parsing and prompt building:
-- Parses compact markdown specs (Interface, Must Do, Edge Cases)
-- **Validation**: Provides `validate_spec` for non-throwing verification of spec format and requirements.
-- **Language Awareness**: `SpecPhaseRunner` and `SpecPromptBuilder` are language-aware, allowing for tailored guidance based on the detected project stack (e.g., Godot vs Python).
-- **Single-Phase Execution**: Implements a unified workflow managed by `SpecPhaseRunner`:
-  - **Unified Prompt**: A single prompt instructs the agent to 1) implement the interface, then 2) write tests to verify all requirements. Provides tailored framework-specific instructions (e.g., GUT for Godot, pytest for Python).
-  - **TDD Workflow**: Maintains TDD principles by requiring tests that validate the contract and behavior.
-- **Spec-First Strategy**: Instructs agents to treat the specification as the source of truth, minimizing unnecessary codebase exploration to ensure strict adherence to the defined interface.
-- **Circuit Breaker**: Implements an 8-read limit for specification-based tasks. If an agent makes more than 8 file reads without writing code, it is forced to stop exploration and begin implementation based on the spec.
-- **Output Compression**: Instructs agents to summarize validation output (test results, linter errors) into compact formats to prevent context bloat during iterative development.
-- Defines validation requirements (tests, lint, typecheck)
-
 ### Git Workflow (`src/git/`)
 
 Automated commits with AI-generated messages:
@@ -95,9 +81,8 @@ Desktop                    Conductor                 CLI Agent
    │◀── {status: "blocked"} ──┤ (if guard fails)         │
    │                          │                          │
    │                          │─── spawn GUI + agent ───▶│
-   │                          │    (detects Spec/Prose)  │
    │                          │                          │
-   │◀── {task_id, mode} ──────│                          │
+   │◀── {task_id} ────────────│                          │
    │                          │                          │
    │                          │    ... agent works ...   │
    │                          │                          │
