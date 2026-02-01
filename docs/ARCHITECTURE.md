@@ -104,9 +104,9 @@ CLI_CONFIGS = {
         "default_model": "opus"
     },
     "gemini": {
-        "cmd": "gemini ...",
+        "cmd": "gemini --output-format stream-json --approval-mode yolo",
         "uses_stdin": True,
-        "default_model": "gemini-2.5-flash"
+        "default_model": "gemini-2.5-pro"
     },
     "codex": {
         "cmd": "codex exec ...",
