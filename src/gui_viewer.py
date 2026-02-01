@@ -30,13 +30,13 @@ CLI_CONFIGS = {
         "models": ["opus", "sonnet"]
     },
     "gemini": {
-        "cmd": 'gemini --output-format stream-json --approval-mode yolo --allowed-tools "Bash,Edit,WriteFile,ReadFile,Glob,Grep,Shell,Replace,SearchText,FindFiles,ListDirectory,WebFetch,GoogleSearch"',
+        "cmd": "gemini --output-format stream-json --approval-mode yolo",
         "add_dir_flag": None,
         "model_flag": "-m",
         "title": "Gemini CLI",
         "uses_stdin": True,
-        "default_model": "gemini-3-pro-preview",
-        "models": ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-3-pro-preview"]
+        "default_model": "gemini-2.5-pro",
+        "models": ["gemini-2.5-flash", "gemini-2.5-pro"]
     },
     "codex": {
         "cmd": "codex exec --json --full-auto",
