@@ -28,13 +28,15 @@ mapper/
 
 The mapper extracts high-level metadata from key Python modules (or project configuration for Godot). The `StackDetector` prioritized Godot (`project.godot`) to ensure proper steering and testing guidance for game projects.
 
-### GUI Viewer (`src/gui_viewer.py`)
+### GUI Viewer (`src/gui/`)
 
-Real-time streaming output window:
+PySide6-based real-time streaming output window:
 - Parses stream-json from CLI agents
-- Color-coded tool calls (READ=cyan, EDIT=gold, BASH=gold)
+- HTML-based color coding (READ, EDIT, BASH) with modular formatters
+- Centralized theming (`gui/theme.py`)
 - Summary panel with stats
 - **Task Lifecycle**: Reports completion to Task Tracker and triggers automatic Git commit on success. Reports failure if the window is closed before the task finishes.
+- **Subprocess Entry**: `src/gui_viewer.py` provides the CLI interface for launching the window.
 
 ### Task Tracker (`src/tasks/`)
 
