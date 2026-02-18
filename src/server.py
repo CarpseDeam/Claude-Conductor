@@ -400,7 +400,11 @@ class ClaudeCodeMCPServer:
 
         viewer_script = Path(__file__).parent / "gui_viewer.py"
 
-        cmd = [sys.executable, str(viewer_script), project_path, str(prompt_file)]
+        # Use the project's venv python (has PySide6), not the MCP server's python
+        venv_python = Path(__file__).parent.parent / ".venv" / "Scripts" / "python.exe"
+        python_exe = str(venv_python) if venv_python.exists() else sys.executable
+
+        cmd = [python_exe, str(viewer_script), project_path, str(prompt_file)]
         cmd.extend(["--task-id", task_id])
         cmd.extend(["--cli", cli])
         if model:
@@ -408,7 +412,6 @@ class ClaudeCodeMCPServer:
 
         subprocess.Popen(
             cmd,
-            creationflags=subprocess.CREATE_NO_WINDOW,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             stdin=subprocess.DEVNULL

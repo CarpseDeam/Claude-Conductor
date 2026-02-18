@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel, QTextBrowser, QStatusBar
 from PySide6.QtCore import QObject, Signal, QTimer, Qt
-from PySide6.QtGui import QTextCursor
+from PySide6.QtGui import QTextCursor, QTextOption
 
 from gui.theme import STYLESHEET, COLORS
 from gui.formatters import format_claude_line, format_gemini_line, format_summary_card
@@ -110,7 +110,7 @@ class ClaudeOutputWindow(QMainWindow):
         self._output = QTextBrowser()
         self._output.setReadOnly(True)
         self._output.setOpenExternalLinks(False)
-        self._output.setWordWrapMode(Qt.TextOption.WrapAtWordBoundaryOrAnywhere)
+        self._output.setWordWrapMode(QTextOption.WrapMode.WrapAtWordBoundaryOrAnywhere)
         layout.addWidget(self._output)
 
         self._statusbar = QStatusBar()

@@ -1,6 +1,10 @@
 """GUI viewer entry point. Launched as subprocess by server.py."""
 import sys
+import traceback
 from pathlib import Path
+
+# Log errors to file since stdout/stderr are piped to DEVNULL
+_LOG_FILE = Path(__file__).parent / "_gui_error.log"
 
 
 def main() -> None:
@@ -55,4 +59,13 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        with open(_LOG_FILE, "w") as f:
+            f.write(f"Python: {sys.executable}\n")
+            f.write(f"Version: {sys.version}\n")
+            f.write(f"Args: {sys.argv}\n\n")
+            f.write(f"ERROR: {e}\n\n")
+            f.write(traceback.format_exc())
+        raise

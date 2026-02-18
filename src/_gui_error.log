@@ -1,0 +1,18 @@
+Python: C:\Projects\ClaudeDesktop-ClaudeCode-Bridge\.venv\Scripts\python.exe
+Version: 3.11.9 (tags/v3.11.9:de54cf5, Apr  2 2024, 10:12:12) [MSC v.1938 64 bit (AMD64)]
+Args: ['C:\\Projects\\ClaudeDesktop-ClaudeCode-Bridge\\src\\gui_viewer.py', 'C:\\Projects\\ClaudeDesktop-ClaudeCode-Bridge', 'C:\\Projects\\ClaudeDesktop-ClaudeCode-Bridge\\_dispatch_prompt.txt', '--task-id', '00b3223e', '--cli', 'claude']
+
+ERROR: type object 'PySide6.QtCore.Qt' has no attribute 'TextOption'
+
+Traceback (most recent call last):
+  File "C:\Projects\ClaudeDesktop-ClaudeCode-Bridge\src\gui_viewer.py", line 63, in <module>
+    main()
+  File "C:\Projects\ClaudeDesktop-ClaudeCode-Bridge\src\gui_viewer.py", line 54, in main
+    window = ClaudeOutputWindow(
+             ^^^^^^^^^^^^^^^^^^^
+  File "C:\Projects\ClaudeDesktop-ClaudeCode-Bridge\src\gui\viewer.py", line 88, in __init__
+    self._build_ui()
+  File "C:\Projects\ClaudeDesktop-ClaudeCode-Bridge\src\gui\viewer.py", line 113, in _build_ui
+    self._output.setWordWrapMode(Qt.TextOption.WrapAtWordBoundaryOrAnywhere)
+                                 ^^^^^^^^^^^^^
+AttributeError: type object 'PySide6.QtCore.Qt' has no attribute 'TextOption'
