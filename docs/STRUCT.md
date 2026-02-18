@@ -47,9 +47,10 @@ _GUI entry point. Launched as a subprocess by server.py. Logs errors to `src/_gu
 ### `src\gui\`
 _PySide6 real-time output viewer with modular formatting and theming._
 
-**ClaudeOutputWindow**: Main window handling process execution and UI updates.
-**Formatters**: HTML formatting for Claude and Gemini JSON streams.
+**ClaudeOutputWindow**: Main window handling process execution and UI updates. Now supports persistent sessions with TCP-based follow-up prompts.
+**Formatters**: HTML formatting for Claude and Gemini JSON streams. Includes `format_turn_separator`.
 **Theme**: Centralized CSS and color palette.
+**Session**: `SessionListener` for receiving prompts and `send_prompt` for cross-process communication.
 
 ### `src\tasks\tracker.py`
 _Task tracking and persistence._

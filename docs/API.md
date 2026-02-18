@@ -55,10 +55,11 @@ _Data models for the user service._
 
 Dispatch coding task to CLI agent. Describe what you want done in the content parameter.
 
-**Concurrency & Deduplication:**
-The server uses a `DispatchGuard` to prevent:
-1. **Concurrent Tasks**: Only one task can run per `project_path` at a time. Tasks running longer than 10 minutes are automatically failed as stale.
-2. **Duplicate Dispatches**: Identical content hashes are blocked for 5 minutes.
+**Persistent Sessions & Follow-ups:**
+The server uses a `DispatchGuard` to manage project sessions:
+1. **Session Routing**: If a task is already running or completed but the GUI window is still open for the given `project_path`, the server will automatically route the `content` as a follow-up turn to that window. This avoids launching multiple windows for the same project.
+2. **Claude Resume**: For Claude CLI, the server captures the `session_id` from the first turn and uses `--resume` for subsequent turns in the same window.
+3. **Concurrency**: Only one active dispatch per project path is allowed. Tasks running longer than 10 minutes are auto-failed.
 
 **Parameters:**
 | Name | Type | Required | Description |
@@ -68,7 +69,7 @@ The server uses a `DispatchGuard` to prevent:
 | `cli` | string | No | "claude", "gemini", or "codex" (default: "claude") |
 | `model` | string | No | Model override |
 
-**Returns:**
+**Returns (New Launch):**
 ```json
 {
   "status": "launched",
@@ -79,12 +80,21 @@ The server uses a `DispatchGuard` to prevent:
 }
 ```
 
-**Error Responses (Guard Blocked):**
+**Returns (Session Follow-up):**
 ```json
 {
-  "status": "already_running",
-  "task_id": "existing_id",
-  "message": "Task already running for this project. Use get_task_result to check status."
+  "status": "session_followup",
+  "task_id": "a1b2c3d4",
+  "session_id": "s12345",
+  "message": "Follow-up sent to active session. Output appears in the existing GUI window."
+}
+```
+
+**Error Responses:**
+```json
+{
+  "status": "session_expired",
+  "message": "Previous session closed. Dispatch again to start a new session."
 }
 ```
 or

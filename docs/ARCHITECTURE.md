@@ -33,15 +33,17 @@ The mapper extracts high-level metadata from key Python modules (or project conf
 PySide6-based real-time streaming output window:
 - Parses stream-json from CLI agents
 - HTML-based color coding (READ, EDIT, BASH) with modular formatters
-- Centralized theming (`gui/theme.py`)
+- Centralized theming (`gui/theme.py`) with enhanced legibility (larger fonts/padding)
 - Summary panel with stats
-- **Task Lifecycle**: Reports completion to Task Tracker and triggers automatic Git commit on success. Reports failure if the window is closed before the task finishes.
+- **Task Lifecycle**: Supports multiple turns within a single window. The window starts a `SessionListener` (TCP server) and registers its port in the `TaskTracker`. Subsequent prompts for the same project are routed to the existing window.
+- **Session Persistence**: Captures `session_id` from initial Claude CLI output and uses `--resume <session_id>` for follow-up turns.
 - **Subprocess Entry**: `src/gui_viewer.py` provides the CLI interface for launching the window. The server attempts to use the project's `.venv` Python interpreter to ensure PySide6 dependencies are met, and errors are captured in `src/_gui_error.log`.
 
 ### Task Tracker (`src/tasks/`)
 
 Tracks dispatched tasks and results:
 - Creates task records on dispatch
+- Stores `session_id` and `socket_port` for persistent session routing
 - GUI reports completion
 - Desktop queries results
 
@@ -74,24 +76,19 @@ Project Files → Mapper → Detector → Codebase Map → Markdown
 ### Task Dispatch
 
 ```
-Desktop                    Conductor                 CLI Agent
+Desktop                    Conductor                 GUI Session
    │                          │                          │
    │─── dispatch(content) ───▶│                          │
    │                          │─── DispatchGuard check ──┤
-   │                          │    (running? duplicate?)  │
+   │                          │    (active session?)     │
    │                          │                          │
-   │◀── {status: "blocked"} ──┤ (if guard fails)         │
+   │◀── {status: "followup"} ─┼────── send prompt ──────▶│
+   │    (if session exists)   │                          │─── next turn ───▶ CLI Agent
    │                          │                          │
    │                          │─── spawn GUI + agent ───▶│
+   │                          │    (if no session)       │
    │                          │                          │
    │◀── {task_id} ────────────│                          │
-   │                          │                          │
-   │                          │    ... agent works ...   │
-   │                          │                          │
-   │                          │◀─── completion ──────────│
-   │                          │                          │
-   │─── get_task_result ─────▶│                          │
-   │◀── {summary, files, cli_output} ─│                  │
 ```
 
 ## CLI Backend Abstraction
