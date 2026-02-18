@@ -35,7 +35,7 @@ def _span(text: str, color: str) -> str:
 def _badge(label: str, color: str) -> str:
     return (
         f"<span style='background:{_c('badge_bg')}; color:{color}; "
-        f"padding:1px 6px; border-radius:3px; font-size:9px; font-weight:bold;'>{label}</span>"
+        f"padding:2px 8px; border-radius:3px; font-size:12px; font-weight:bold;'>{label}</span>"
     )
 
 
@@ -305,6 +305,15 @@ def format_todo_list(todos: list) -> str:
         lines.append(_span(f"{icon} {content}", color) + "<br>")
     lines.append("</div>")
     return "".join(lines)
+
+
+def format_turn_separator(turn_number: int) -> str:
+    """HTML divider between session turns."""
+    return (
+        f"<br><div style='border-top:1px solid {_c('border')}; margin:12px 0; padding-top:10px;'>"
+        f"<span style='color:{_c('accent_magenta')}; font-weight:bold; font-size:12px;'>"
+        f"Turn {turn_number}</span></div>"
+    )
 
 
 def format_summary_card(stats: dict) -> str:

@@ -25,23 +25,27 @@ class DispatchGuard:
 
     STALE_TASK_SECONDS = 600  # 10 minutes - tasks older than this are considered stale
 
-    def check_running_task(self, project_path: str, tracker: TaskTracker) -> dict | None:
-        """Return blocking response if a task is already running for this project."""
+    def find_active_session(self, project_path: str, tracker: TaskTracker):
+        """Find a running or completed task with an active session for this project.
+        
+        Returns the TaskRecord if a session is available, None otherwise.
+        Also cleans up stale tasks.
+        """
         from datetime import datetime
+        from tasks.contracts import TaskRecord
         now = datetime.now()
         for task in tracker.get_recent_tasks(10):
-            if task.project_path == project_path and task.status == TaskStatus.RUNNING:
+            if task.project_path != project_path:
+                continue
+            if task.status == TaskStatus.RUNNING:
                 age = (now - task.started_at).total_seconds()
                 if age > self.STALE_TASK_SECONDS:
                     task.status = TaskStatus.FAILED
                     task.error = "Stale task - auto-failed after 10 minutes"
                     tracker._save(task)
                     continue
-                return {
-                    "status": "already_running",
-                    "task_id": task.task_id,
-                    "message": "Task already running for this project. Use get_task_result to check status."
-                }
+            if task.socket_port and task.status in (TaskStatus.RUNNING, TaskStatus.COMPLETED):
+                return task
         return None
 
     def check_duplicate(self, content: str) -> dict | None:
@@ -368,9 +372,7 @@ class ClaudeCodeMCPServer:
         )]
 
     def _handle_dispatch(self, arguments: dict) -> list[TextContent]:
-        """Handle unified dispatch tool call."""
-        from dispatch import DispatchHandler
-
+        """Handle dispatch — routes to active session or launches new one."""
         content = arguments["content"]
         project_path = arguments["project_path"]
         cli = arguments.get("cli", "claude")
@@ -381,15 +383,44 @@ class ClaudeCodeMCPServer:
 
         tracker = TaskTracker()
 
-        if blocking := self._dispatch_guard.check_running_task(project_path, tracker):
-            return [TextContent(type="text", text=json.dumps(blocking, indent=2))]
+        # Try routing to an active session first
+        active = self._dispatch_guard.find_active_session(project_path, tracker)
+        if active and active.socket_port:
+            return self._dispatch_to_session(active, content, project_path)
 
         if blocking := self._dispatch_guard.check_duplicate(content):
             return [TextContent(type="text", text=json.dumps(blocking, indent=2))]
 
+        return self._dispatch_new(content, project_path, cli, model, tracker)
+
+    def _dispatch_to_session(self, task, content: str, project_path: str) -> list[TextContent]:
+        """Send a follow-up prompt to an existing GUI session via socket."""
+        from gui.session import send_prompt
+
+        success = send_prompt(task.socket_port, content)
+        if success:
+            return [TextContent(type="text", text=json.dumps({
+                "status": "session_followup",
+                "task_id": task.task_id,
+                "session_id": task.session_id,
+                "message": "Follow-up sent to active session. Output appears in the existing GUI window.",
+            }, indent=2))]
+
+        # Socket dead — session closed. Clear port and fall through to new launch.
+        task.socket_port = None
+        TaskTracker()._save(task)
+        return [TextContent(type="text", text=json.dumps({
+            "status": "session_expired",
+            "message": "Previous session closed. Dispatch again to start a new session.",
+        }, indent=2))]
+
+    def _dispatch_new(self, content: str, project_path: str, cli: str,
+                      model: str | None, tracker: TaskTracker) -> list[TextContent]:
+        """Launch a new GUI viewer subprocess."""
+        from dispatch import DispatchHandler
+
         handler = DispatchHandler()
         request = handler.prepare(content, Path(project_path), cli, model)
-
         full_prompt = handler.build_prompt(request, SYSTEM_PROMPT)
 
         task_id = tracker.create_task(project_path, cli)
@@ -399,8 +430,6 @@ class ClaudeCodeMCPServer:
         prompt_file.write_text(full_prompt, encoding='utf-8')
 
         viewer_script = Path(__file__).parent / "gui_viewer.py"
-
-        # Use the project's venv python (has PySide6), not the MCP server's python
         venv_python = Path(__file__).parent.parent / ".venv" / "Scripts" / "python.exe"
         python_exe = str(venv_python) if venv_python.exists() else sys.executable
 
@@ -414,23 +443,18 @@ class ClaudeCodeMCPServer:
             cmd,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            stdin=subprocess.DEVNULL
+            stdin=subprocess.DEVNULL,
         )
 
         cli_names = {"claude": "Claude Code", "gemini": "Gemini CLI", "codex": "OpenAI Codex"}
-        response = {
+        return [TextContent(type="text", text=json.dumps({
             "status": "launched",
             "task_id": task_id,
             "cli": cli_names.get(cli, cli),
             "model": model or "default",
             "project_path": project_path,
-        }
-
-        response["message"] = (
-            "Task launched. DO NOT call get_task_result - wait for user to confirm completion."
-        )
-
-        return [TextContent(type="text", text=json.dumps(response, indent=2))]
+            "message": "Task launched. DO NOT call get_task_result - wait for user to confirm completion.",
+        }, indent=2))]
 
     def _handle_get_task_result(self, arguments: dict) -> list[TextContent]:
         """Handle get_task_result tool call."""

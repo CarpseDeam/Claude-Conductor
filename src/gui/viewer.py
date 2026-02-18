@@ -1,4 +1,5 @@
-"""PySide6 main window for Claude/Gemini CLI output."""
+"""PySide6 main window for Claude/Gemini CLI output with session support."""
+import json
 import subprocess
 import threading
 import time
@@ -7,11 +8,15 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel, QTextBrowser, QStatusBar
-from PySide6.QtCore import QObject, Signal, QTimer, Qt
+from PySide6.QtCore import QObject, Signal, QTimer
 from PySide6.QtGui import QTextCursor, QTextOption
 
 from gui.theme import STYLESHEET, COLORS
-from gui.formatters import format_claude_line, format_gemini_line, format_summary_card
+from gui.formatters import (
+    format_claude_line, format_gemini_line,
+    format_summary_card, format_turn_separator,
+)
+from gui.session import SessionListener
 
 if TYPE_CHECKING:
     from git.contracts import WorkflowResult
@@ -55,6 +60,7 @@ class _Signals(QObject):
     append_html = Signal(str)
     set_status = Signal(str, str)
     show_summary = Signal()
+    new_prompt = Signal(str)
 
 
 class ClaudeOutputWindow(QMainWindow):
@@ -77,20 +83,27 @@ class ClaudeOutputWindow(QMainWindow):
         self._task_id = task_id
         self._task_reported = False
         self._process = None
-        self._stats = {
-            "files_read": [], "files_written": [], "tools_used": 0,
-            "errors": 0, "start_time": time.time(), "cli_output": [],
-        }
+        self._session_id: str | None = None
+        self._turn_number = 1
+        self._stats = self._fresh_stats()
         self._state: dict = {"last_tool_type": None, "last_bash_command": None}
         self._signals = _Signals()
         self._elapsed = 0
+        self._session_listener: SessionListener | None = None
 
         self._build_ui()
         self._connect_signals()
+        self._start_session_listener()
+
+    def _fresh_stats(self) -> dict:
+        return {
+            "files_read": [], "files_written": [], "tools_used": 0,
+            "errors": 0, "start_time": time.time(), "cli_output": [],
+        }
 
     def _build_ui(self) -> None:
         model_display = self._model.split("-")[-1] if self._model else ""
-        self.setWindowTitle(f"{self._config['title']} ({model_display}) - {Path(self._project_path).name}")
+        self.setWindowTitle(f"{self._config['title']} ({model_display}) — {Path(self._project_path).name}")
         self.resize(960, 640)
         self.setStyleSheet(STYLESHEET)
 
@@ -125,6 +138,41 @@ class ClaudeOutputWindow(QMainWindow):
         self._signals.append_html.connect(self._append_html)
         self._signals.set_status.connect(self._set_status)
         self._signals.show_summary.connect(self._show_summary)
+        self._signals.new_prompt.connect(self._handle_followup)
+
+    def _start_session_listener(self) -> None:
+        """Start TCP listener and register port with task tracker."""
+        self._session_listener = SessionListener(
+            on_prompt=lambda prompt: self._signals.new_prompt.emit(prompt)
+        )
+        port = self._session_listener.start()
+        self._update_task_port(port)
+
+    def _update_task_port(self, port: int) -> None:
+        """Write socket port to task record so server can find us."""
+        if not self._task_id:
+            return
+        try:
+            from tasks.tracker import TaskTracker
+            record = TaskTracker().get_task(self._task_id)
+            if record:
+                record.socket_port = port
+                TaskTracker()._save(record)
+        except Exception as e:
+            logger.warning(f"Failed to update task port: {e}")
+
+    def _update_task_session_id(self) -> None:
+        """Write captured session_id to task record."""
+        if not self._task_id or not self._session_id:
+            return
+        try:
+            from tasks.tracker import TaskTracker
+            record = TaskTracker().get_task(self._task_id)
+            if record:
+                record.session_id = self._session_id
+                TaskTracker()._save(record)
+        except Exception as e:
+            logger.warning(f"Failed to update session_id: {e}")
 
     def _tick_elapsed(self) -> None:
         self._elapsed += 1
@@ -143,36 +191,56 @@ class ClaudeOutputWindow(QMainWindow):
         self._statusbar.showMessage(text)
         self._statusbar.setStyleSheet(f"color: {color};")
 
+    # --- Turn execution ---
+
     def _run_worker(self) -> None:
+        """Run the initial prompt as turn 1."""
         success = self._run_single_phase(self._prompt)
         self._signals.show_summary.emit()
         if success:
-            self._signals.set_status.emit("Completed!", COLORS["accent_green"])
+            self._signals.set_status.emit("Session ready — waiting for follow-up", COLORS["accent_green"])
             self._report_task_completion()
             threading.Thread(target=self._auto_git_commit, daemon=True).start()
         else:
             self._signals.set_status.emit("Failed", COLORS["accent_yellow"])
             self._report_task_failure("CLI execution failed")
 
-    def _run_single_phase(self, prompt: str) -> bool:
-        cmd = self._config["cmd"]
-        if self._model and self._config.get("model_flag"):
-            cmd = f'{cmd} {self._config["model_flag"]} {self._model}'
+    def _handle_followup(self, prompt: str) -> None:
+        """Handle a follow-up prompt from the session listener (runs on main thread via signal)."""
+        self._turn_number += 1
+        self._state = {"last_tool_type": None, "last_bash_command": None}
+        self._stats["start_time"] = time.time()
+        self._elapsed = 0
 
-        if self._additional_dirs:
-            if self._config["add_dir_flag"]:
-                add_dirs = " ".join(f'{self._config["add_dir_flag"]} "{d}"' for d in self._additional_dirs)
-                cmd = f"{cmd} {add_dirs}"
-            elif self._cli == "gemini":
-                dirs_csv = ",".join(self._additional_dirs)
-                cmd = f'{cmd} --include-directories "{dirs_csv}"'
+        self._append_html(format_turn_separator(self._turn_number))
+        threading.Thread(
+            target=self._run_followup_worker, args=(prompt,), daemon=True
+        ).start()
 
-        if not self._config["uses_stdin"]:
-            escaped = prompt.replace('"', '\\"')
-            cmd = f'{cmd} "{escaped}"'
+    def _run_followup_worker(self, prompt: str) -> None:
+        """Run a follow-up prompt using --resume."""
+        self._signals.set_status.emit("Running... 0s", COLORS["accent_green"])
+        success = self._run_single_phase(prompt, resume=True)
+        self._signals.show_summary.emit()
+        if success:
+            self._signals.set_status.emit("Session ready — waiting for follow-up", COLORS["accent_green"])
+            threading.Thread(target=self._auto_git_commit, daemon=True).start()
+        else:
+            self._signals.set_status.emit("Turn failed", COLORS["accent_yellow"])
+
+    def _run_single_phase(self, prompt: str, resume: bool = False) -> bool:
+        """Run a single CLI invocation. Captures session_id from first turn."""
+        cmd = self._build_cmd(prompt, resume)
 
         model_display = self._model or "default"
-        self._signals.append_html.emit(f"<span style='color:{COLORS['text_muted']};'>Starting {self._config['title']} ({model_display})...</span><br><br>")
+        if resume:
+            self._signals.append_html.emit(
+                f"<span style='color:{COLORS['text_muted']};'>Resuming session ({model_display})...</span><br><br>"
+            )
+        else:
+            self._signals.append_html.emit(
+                f"<span style='color:{COLORS['text_muted']};'>Starting {self._config['title']} ({model_display})...</span><br><br>"
+            )
         self._signals.set_status.emit("Running... 0s", COLORS["accent_green"])
 
         formatter = format_gemini_line if self._cli == "gemini" else format_claude_line
@@ -196,6 +264,9 @@ class ClaudeOutputWindow(QMainWindow):
                     break
                 if not line:
                     continue
+
+                self._try_capture_session_id(line)
+
                 for seg in formatter(line, self._stats, self._state):
                     self._signals.append_html.emit(seg.html)
                     if seg.html.strip():
@@ -205,13 +276,54 @@ class ClaudeOutputWindow(QMainWindow):
             return self._process.returncode == 0
 
         except Exception as e:
-            self._signals.append_html.emit(f"<br><span style='color:{COLORS['accent_red']};'>ERROR: {e}</span><br>")
+            self._signals.append_html.emit(
+                f"<br><span style='color:{COLORS['accent_red']};'>ERROR: {e}</span><br>"
+            )
             return False
+
+    def _build_cmd(self, prompt: str, resume: bool) -> str:
+        """Build the CLI command string."""
+        cmd = self._config["cmd"]
+
+        if resume and self._session_id and self._cli == "claude":
+            cmd = f"{cmd} --resume {self._session_id}"
+
+        if self._model and self._config.get("model_flag"):
+            cmd = f'{cmd} {self._config["model_flag"]} {self._model}'
+
+        if self._additional_dirs:
+            if self._config["add_dir_flag"]:
+                add_dirs = " ".join(f'{self._config["add_dir_flag"]} "{d}"' for d in self._additional_dirs)
+                cmd = f"{cmd} {add_dirs}"
+            elif self._cli == "gemini":
+                dirs_csv = ",".join(self._additional_dirs)
+                cmd = f'{cmd} --include-directories "{dirs_csv}"'
+
+        if not self._config["uses_stdin"]:
+            escaped = prompt.replace('"', '\\"')
+            cmd = f'{cmd} "{escaped}"'
+
+        return cmd
+
+    def _try_capture_session_id(self, line: str) -> None:
+        """Extract session_id from Claude's JSON stream on first turn."""
+        if self._session_id:
+            return
+        try:
+            data = json.loads(line)
+            sid = data.get("session_id")
+            if sid:
+                self._session_id = sid
+                self._update_task_session_id()
+                logger.info(f"Captured session_id: {sid}")
+        except (json.JSONDecodeError, KeyError):
+            pass
+
+    # --- Summary & reporting ---
 
     def _show_summary(self) -> None:
         if self._godot_project:
-            godot_html = self._godot_html()
-            self._append_html(godot_html)
+            self._append_html(self._godot_html())
         self._append_html(format_summary_card(self._stats))
 
     def _godot_html(self) -> str:
@@ -255,6 +367,8 @@ class ClaudeOutputWindow(QMainWindow):
         except Exception as e:
             self._signals.set_status.emit(f"⚠ Task report failed: {e}", COLORS["accent_yellow"])
 
+    # --- Git & pipelines ---
+
     def _auto_git_commit(self) -> None:
         if not (Path(self._project_path) / ".git").exists():
             return
@@ -274,7 +388,7 @@ class ClaudeOutputWindow(QMainWindow):
             return f"{label}: {preview}", COLORS["accent_green"]
         if result.errors and "No changes to commit" not in result.errors[0]:
             return f"⚠ Git: {result.errors[0][:60]}", COLORS["accent_yellow"]
-        return "Completed!", COLORS["accent_green"]
+        return "Session ready — waiting for follow-up", COLORS["accent_green"]
 
     def _run_post_commit_pipelines(self, diff_content: str) -> None:
         self._signals.set_status.emit("Updating docs...", COLORS["accent_yellow"])
@@ -285,7 +399,11 @@ class ClaudeOutputWindow(QMainWindow):
         except Exception as e:
             self._signals.set_status.emit(f"⚠ Pipeline: {e}", COLORS["accent_yellow"])
 
+    # --- Lifecycle ---
+
     def closeEvent(self, event) -> None:
+        if self._session_listener:
+            self._session_listener.stop()
         if self._process and self._process.poll() is None:
             self._process.terminate()
         if self._task_id and not self._task_reported:

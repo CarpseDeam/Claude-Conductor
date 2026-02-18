@@ -25,6 +25,8 @@ class TaskRecord:
     summary: str | None = None
     error: str | None = None
     cli_output: str | None = None
+    session_id: str | None = None
+    socket_port: int | None = None
 
     def to_dict(self) -> dict:
         """Serialize to dictionary for JSON storage."""
@@ -39,6 +41,8 @@ class TaskRecord:
             "summary": self.summary,
             "error": self.error,
             "cli_output": self.cli_output,
+            "session_id": self.session_id,
+            "socket_port": self.socket_port,
         }
 
     @classmethod
@@ -55,4 +59,6 @@ class TaskRecord:
             summary=data.get("summary"),
             error=data.get("error"),
             cli_output=data.get("cli_output"),
+            session_id=data.get("session_id"),
+            socket_port=data.get("socket_port"),
         )

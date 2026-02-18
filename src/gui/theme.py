@@ -27,18 +27,18 @@ QWidget#central {{
 QLabel#header {{
     background-color: {COLORS['bg_secondary']};
     color: {COLORS['text_muted']};
-    padding: 6px 12px;
+    padding: 8px 14px;
     font-family: 'Cascadia Code', 'Consolas', monospace;
-    font-size: 11px;
+    font-size: 14px;
     border-bottom: 1px solid {COLORS['border']};
 }}
 QTextBrowser {{
     background-color: {COLORS['bg_input']};
     color: {COLORS['text_primary']};
     font-family: 'Cascadia Code', 'Consolas', monospace;
-    font-size: 11px;
+    font-size: 14px;
     border: none;
-    padding: 10px;
+    padding: 12px;
     selection-background-color: {COLORS['bg_secondary']};
 }}
 QScrollBar:vertical {{
@@ -58,8 +58,8 @@ QStatusBar {{
     background-color: {COLORS['bg_secondary']};
     color: {COLORS['text_muted']};
     font-family: 'Cascadia Code', 'Consolas', monospace;
-    font-size: 10px;
+    font-size: 12px;
     border-top: 1px solid {COLORS['border']};
-    padding: 2px 8px;
+    padding: 4px 10px;
 }}
 """
