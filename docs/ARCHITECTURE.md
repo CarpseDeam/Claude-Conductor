@@ -36,7 +36,7 @@ PySide6-based real-time streaming output window:
 - Centralized theming (`gui/theme.py`)
 - Summary panel with stats
 - **Task Lifecycle**: Reports completion to Task Tracker and triggers automatic Git commit on success. Reports failure if the window is closed before the task finishes.
-- **Subprocess Entry**: `src/gui_viewer.py` provides the CLI interface for launching the window.
+- **Subprocess Entry**: `src/gui_viewer.py` provides the CLI interface for launching the window. The server attempts to use the project's `.venv` Python interpreter to ensure PySide6 dependencies are met, and errors are captured in `src/_gui_error.log`.
 
 ### Task Tracker (`src/tasks/`)
 

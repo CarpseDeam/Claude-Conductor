@@ -42,7 +42,7 @@ _Language and stack detection logic._
 **StackDetector**: `detect(project_path)` - Now supports Godot (GDScript) priority detection.
 
 ### `src\gui_viewer.py`
-_GUI entry point. Launched as a subprocess by server.py._
+_GUI entry point. Launched as a subprocess by server.py. Logs errors to `src/_gui_error.log`._
 
 ### `src\gui\`
 _PySide6 real-time output viewer with modular formatting and theming._

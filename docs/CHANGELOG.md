@@ -6,6 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+- 2026-02-18: fix: improve GUI viewer stability with virtual environment detection and error logging
 - 2026-02-17: refactor: migrate GUI viewer from tkinter to PySide6 and modularize into `src/gui/` package
 - 2026-02-01: refactor: update Gemini CLI configuration (models and command)
 - 2026-01-29: fix: report task failure in GUI viewer if window is closed before completion
