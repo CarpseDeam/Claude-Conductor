@@ -11,12 +11,13 @@ Conductor bridges Claude Desktop to CLI coding agents. The key insight: Desktop 
 Stdio-based MCP server exposing tools to Claude Desktop:
 - Tool registration and schema
 - Request routing to handlers
-- **DispatchGuard**: Prevents concurrent tasks for the same project and deduplicates identical requests within a 5-minute window.
+- **DispatchGuard**: Prevents concurrent tasks for the same project and deduplicates identical requests. Includes socket probing to verify active sessions and enforces a 30-minute session max age.
+- **Intent Guidance**: System prompt instructs agents to treat dispatch as intent rather than a strict blueprint, encouraging them to read source files and follow existing patterns.
 - JSON response formatting
 
-### Codebase Mapper (`src/mapper/`)
+### Codebase Mapper (`src/mapper/`) [INTERNAL]
 
-Generates compressed project manifests for Desktop context efficiency. Optimized for high-speed synchronous execution (<1s) by using a shallow directory walk (depth=2) and identifying key files by name patterns before performing AST enrichment.
+Optimized for high-speed project analysis. While no longer exposed as a direct MCP tool (as modern CLI agents handle discovery autonomously), the mapper remains in the codebase as a utility for generating compressed manifests if needed.
 
 ```
 mapper/
@@ -26,26 +27,24 @@ mapper/
 └── git_info.py          # Git history extraction (utility)
 ```
 
-The mapper extracts high-level metadata from key Python modules (or project configuration for Godot). The `StackDetector` prioritized Godot (`project.godot`) to ensure proper steering and testing guidance for game projects.
-
 ### GUI Viewer (`src/gui/`)
 
 PySide6-based real-time streaming output window:
 - Parses stream-json from CLI agents
-- HTML-based color coding (READ, EDIT, BASH) with modular formatters
-- Centralized theming (`gui/theme.py`) with enhanced legibility (larger fonts/padding)
-- Summary panel with stats
-- **Task Lifecycle**: Supports multiple turns within a single window. The window starts a `SessionListener` (TCP server) and registers its port in the `TaskTracker`. Subsequent prompts for the same project are routed to the existing window.
-- **Session Persistence**: Captures `session_id` from initial Claude CLI output and uses `--resume <session_id>` for follow-up turns.
-- **Subprocess Entry**: `src/gui_viewer.py` provides the CLI interface for launching the window. The server attempts to use the project's `.venv` Python interpreter to ensure PySide6 dependencies are met, and errors are captured in `src/_gui_error.log`.
+- HTML-based color coding (READ, EDIT, BASH) with modular formatters. Now uses `white-space:pre-wrap` to preserve whitespace in text deltas.
+- Centralized theming (`gui/theme.py`) with enhanced legibility
+- Summary panel with turn-based stats
+- **Task Lifecycle**: Supports multiple turns within a single window. The window starts a `SessionListener` (TCP server) and registers its port in the `TaskTracker`.
+- **Session Persistence**: Merges modified file lists and summaries across turns in the `TaskTracker`.
+- **Subprocess Entry**: `src/gui_viewer.py` launches the window using the project's `.venv` if available.
 
 ### Task Tracker (`src/tasks/`)
 
 Tracks dispatched tasks and results:
 - Creates task records on dispatch
 - Stores `session_id` and `socket_port` for persistent session routing
-- GUI reports completion
-- Desktop queries results
+- Merges results across multiple turns in a single session
+- GUI reports completion/failure
 
 ### Git Workflow (`src/git/`)
 
@@ -63,16 +62,6 @@ Background agents triggered after commits:
 
 ## Data Flow
 
-### Manifest Generation
-
-```
-Project Files → Mapper → Detector → Codebase Map → Markdown
-                   │         │          │           │
-                   ▼         ▼          ▼           ▼
-              Structure   Stack      ~1K tokens   STRUCT.md
-              Files       Lang       (optimized)
-```
-
 ### Task Dispatch
 
 ```
@@ -80,10 +69,10 @@ Desktop                    Conductor                 GUI Session
    │                          │                          │
    │─── dispatch(content) ───▶│                          │
    │                          │─── DispatchGuard check ──┤
-   │                          │    (active session?)     │
+   │                          │    (socket probe)        │
    │                          │                          │
    │◀── {status: "followup"} ─┼────── send prompt ──────▶│
-   │    (if session exists)   │                          │─── next turn ───▶ CLI Agent
+   │    (if session alive)    │                          │─── next turn ───▶ CLI Agent
    │                          │                          │
    │                          │─── spawn GUI + agent ───▶│
    │                          │    (if no session)       │

@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+- 2026-04-24: refactor: remove `get_manifest` and `dispatch_assimilate` tools as CLI agents now handle codebase discovery autonomously
+- 2026-04-24: feat: update system prompt to emphasize intent-based dispatching over implementation blueprints
+- 2026-04-24: feat: improve session routing with socket probing and session max age (30 mins)
+- 2026-04-24: feat: add dispatch length warnings to prevent overly detailed implementations in prompts
+- 2026-04-24: feat: enhance TaskTracker to merge file lists and summaries across multiple turns in the same session
+- 2026-04-24: fix: preserve whitespace in GUI viewer text deltas using `white-space:pre-wrap`
+- 2026-04-24: feat: include turn number in GUI summary cards
 - 2026-02-18: feat: update session test file to verify follow-up turn handling
 - 2026-02-18: feat: implemented persistent GUI sessions with follow-up prompt routing via TCP sockets
 - 2026-02-18: feat: added turn-based UI in GUI viewer with separators and improved legibility (increased font sizes/padding)
