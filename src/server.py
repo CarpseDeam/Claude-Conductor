@@ -25,27 +25,66 @@ class DispatchGuard:
 
     STALE_TASK_SECONDS = 600  # 10 minutes - tasks older than this are considered stale
 
+    SESSION_MAX_AGE = 1800  # 30 minutes — sessions older than this are not routable
+
     def find_active_session(self, project_path: str, tracker: TaskTracker):
         """Find a running or completed task with an active session for this project.
         
-        Returns the TaskRecord if a session is available, None otherwise.
-        Also cleans up stale tasks.
+        Returns the TaskRecord if a live session is available, None otherwise.
+        Probes the socket before returning to confirm it's actually alive.
         """
+        import time as _time
         from datetime import datetime
-        from tasks.contracts import TaskRecord
         now = datetime.now()
+        pending_task = None
+
         for task in tracker.get_recent_tasks(10):
             if task.project_path != project_path:
                 continue
+
             if task.status == TaskStatus.RUNNING:
                 age = (now - task.started_at).total_seconds()
                 if age > self.STALE_TASK_SECONDS:
                     task.status = TaskStatus.FAILED
                     task.error = "Stale task - auto-failed after 10 minutes"
+                    task.socket_port = None
                     tracker._save(task)
                     continue
-            if task.socket_port and task.status in (TaskStatus.RUNNING, TaskStatus.COMPLETED):
+                if not task.socket_port and age < 10:
+                    pending_task = task
+
+            if not task.socket_port:
+                continue
+
+            # Skip old sessions — GUI was probably closed
+            ref_time = task.completed_at or task.started_at
+            if (now - ref_time).total_seconds() > self.SESSION_MAX_AGE:
+                task.socket_port = None
+                tracker._save(task)
+                continue
+
+            if task.status in (TaskStatus.RUNNING, TaskStatus.COMPLETED):
                 return task
+
+        # A task just launched but hasn't registered its port yet — wait for it
+        if pending_task:
+            for _ in range(8):
+                _time.sleep(0.5)
+                fresh = tracker.get_task(pending_task.task_id)
+                if fresh and fresh.socket_port:
+                    return fresh
+
+        return None
+
+    DISPATCH_WARN_THRESHOLD = 1500
+
+    def check_length(self, content: str) -> str | None:
+        """Return a warning if content is suspiciously long and not a Spec."""
+        if len(content) >= self.DISPATCH_WARN_THRESHOLD and not content.lstrip().startswith("## Spec:"):
+            return (
+                f"Dispatch is {len(content)} chars — describe intent, not implementation. "
+                "Pseudocode locks the CLI into your guess. Proceeding anyway."
+            )
         return None
 
     def check_duplicate(self, content: str) -> dict | None:
@@ -104,6 +143,11 @@ Write code that looks inevitable. Follow these constraints:
 - Data flows obviously - reader should predict what happens next
 - No global state
 
+**Treat the dispatch as intent, not a blueprint**
+- If the dispatch contains pseudocode, class skeletons, or step-by-step control flow, treat these as hints about intent
+- Read the actual source files and match existing patterns in this codebase
+- Write idiomatic code — do not transliterate the dispatch
+
 The best code is code you delete. Every line is a liability.
 """
 
@@ -122,47 +166,23 @@ class ClaudeCodeMCPServer:
     async def _list_tools(self) -> list[Tool]:
         return [
             Tool(
-                name="get_manifest",
-                description=(
-                    "Get strategic overview of a codebase. Call this FIRST before coding tasks. "
-                    "Returns: project structure, stack detection (language/frameworks/tools), "
-                    "key files with AST-parsed method signatures. Fast (<1s) - no git calls. "
-                    "Cached to docs/STRUCT.md; use refresh=true to regenerate after changes."
-                ),
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "project_path": {
-                            "type": "string",
-                            "description": "Absolute path to project root (e.g. C:\\Projects\\MyApp)"
-                        },
-                        "refresh": {
-                            "type": "boolean",
-                            "description": "Force rebuild manifest, ignore cache (default: false)"
-                        }
-                    },
-                    "required": ["project_path"]
-                }
-            ),
-            Tool(
-                name="dispatch_assimilate",
-                description=(
-                    "[DEPRECATED] Use get_manifest instead - it's now fast enough for synchronous use."
-                ),
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "project_path": {
-                            "type": "string",
-                            "description": "Absolute path to project root"
-                        }
-                    },
-                    "required": ["project_path"]
-                }
-            ),
-            Tool(
                 name="dispatch",
-                description="Dispatch a coding task to CLI agent. Describe what you want done.",
+                description=(
+                    "Dispatch a coding task to a CLI agent running in the project directory.\n\n"
+                    "Describe INTENT and CONSTRAINTS, not implementation. The CLI reads the codebase "
+                    "and writes the code. Pseudocode in dispatches is an anti-pattern — it creates "
+                    "noise and locks the CLI into a guess instead of what the code actually needs.\n\n"
+                    "BAD (pseudocode transliteration):\n"
+                    "  'Create class FooHandler with method process(data: dict) -> Result. Inside, "
+                    "check if data has id, loop through items calling bar_service.lookup(id), "
+                    "accumulate into list, return Result...'\n\n"
+                    "GOOD (intent + constraints):\n"
+                    "  'Add FooHandler in src/handlers/foo_handler.py. Validates input has id, looks "
+                    "up each item via bar_service, returns Result. Errors bubble.'\n\n"
+                    "Use prose for bug fixes and small changes. Prefix with `## Spec:` for "
+                    "non-trivial features that need structure. Include file paths and behavioral "
+                    "requirements. Skip implementation details unless the exact change matters."
+                ),
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -228,11 +248,7 @@ class ClaudeCodeMCPServer:
         ]
 
     async def _call_tool(self, name: str, arguments: dict) -> list[TextContent]:
-        if name == "get_manifest":
-            return self._handle_get_manifest(arguments)
-        elif name == "dispatch_assimilate":
-            return self._handle_dispatch_assimilate(arguments)
-        elif name == "dispatch":
+        if name == "dispatch":
             return self._handle_dispatch(arguments)
         elif name == "get_task_result":
             return self._handle_get_task_result(arguments)
@@ -242,134 +258,6 @@ class ClaudeCodeMCPServer:
             return self._handle_health_check(arguments)
         else:
             return [TextContent(type="text", text=f"Unknown tool: {name}")]
-
-    def _handle_get_manifest(self, arguments: dict) -> list[TextContent]:
-        """Handle get_manifest tool call."""
-        from mapper import CodebaseMapper
-
-        project_path = Path(arguments["project_path"])
-        refresh = arguments.get("refresh", False)
-
-        if not project_path.exists():
-            return [TextContent(type="text", text=f"Path does not exist: {project_path}")]
-
-        struct_md = project_path / "docs" / "STRUCT.md"
-
-        if struct_md.exists() and not refresh:
-            return [TextContent(type="text", text=struct_md.read_text(encoding="utf-8"))]
-
-        mapper = CodebaseMapper(project_path)
-        codebase_map = mapper.map()
-        markdown = codebase_map.to_markdown()
-
-        (project_path / "docs").mkdir(exist_ok=True)
-        struct_md.write_text(markdown, encoding="utf-8")
-
-        self._generate_steering_file(project_path, codebase_map)
-
-        return [TextContent(type="text", text=markdown)]
-
-    def _generate_steering_file(self, project_path: Path, codebase_map) -> None:
-        """Generate .claude/steering.md with project standards."""
-        claude_dir = project_path / ".claude"
-        claude_dir.mkdir(exist_ok=True)
-
-        stack = codebase_map.stack
-        frameworks = ", ".join(stack.frameworks) if stack.frameworks else "None"
-        tools = ", ".join(stack.tools) if stack.tools else "None"
-
-        if stack.language == "gdscript":
-            content = self._generate_godot_steering(codebase_map, stack, frameworks, tools, project_path)
-        else:
-            content = self._generate_python_steering(codebase_map, stack, frameworks, tools, project_path)
-
-        steering_file = claude_dir / "steering.md"
-        steering_file.write_text(content, encoding="utf-8")
-
-    def _generate_godot_steering(self, codebase_map, stack, frameworks: str, tools: str, project_path: Path) -> str:
-        """Generate steering file content for Godot projects."""
-        gut_addon = project_path / "addons" / "gut"
-        gut_note = ""
-        if not gut_addon.exists():
-            gut_note = "\n- NOTE: GUT addon not found. Install from AssetLib or https://github.com/bitwes/Gut"
-
-        return f"""# Project: {codebase_map.project_name}
-
-## Stack
-- Language: {stack.language}
-- Frameworks: {frameworks}
-- Tools: {tools}
-
-## Environment
-- Engine: Godot 4.x
-- Test framework: GUT (Godot Unit Test)
-- Run tests: `godot --headless -s addons/gut/gut_cmdline.gd -gdir=res://tests/ -gexit`{gut_note}
-
-## Code Standards
-- New files: aim 200-300 lines, split at 400
-- Existing files: don't refactor unless >500 lines
-- Max function size: 25 lines (40+ ok if one clear purpose)
-- Use static typing (var x: int, func foo() -> void)
-- Use class_name for reusable classes
-- Use signals for decoupled communication
-
-## Testing
-- GUT for all tests
-- Test file mirrors source: scripts/player.gd → tests/test_player.gd
-- Test files: res://tests/test_*.gd
-"""
-
-    def _generate_python_steering(self, codebase_map, stack, frameworks: str, tools: str, project_path: Path) -> str:
-        """Generate steering file content for Python projects."""
-        venv_section = ""
-        venv_path = project_path / ".venv"
-        if venv_path.exists():
-            if (venv_path / "Scripts").exists():  # Windows
-                venv_section = """## Environment
-- Virtual env: `.venv` (Windows)
-- Python: `.venv/Scripts/python.exe`
-- Run tests: `.venv/Scripts/python.exe -m pytest tests/ -v`
-- Install deps: `.venv/Scripts/pip.exe install <pkg>`
-"""
-            else:  # Unix
-                venv_section = """## Environment
-- Virtual env: `.venv`
-- Python: `.venv/bin/python`
-- Run tests: `.venv/bin/python -m pytest tests/ -v`
-- Install deps: `.venv/bin/pip install <pkg>`
-"""
-
-        return f"""# Project: {codebase_map.project_name}
-
-## Stack
-- Language: {stack.language}
-- Frameworks: {frameworks}
-- Tools: {tools}
-
-{venv_section}## Code Standards
-- New files: aim 200-300 lines, split at 400
-- Existing files: don't refactor unless >500 lines
-- Working god files: leave alone (one responsibility > line count)
-- Max function size: 25 lines (40+ ok if one clear purpose)
-- Full type hints required
-- Use dataclasses/pydantic for structured data
-- pathlib over os.path
-
-## Testing
-- pytest for all tests
-- No mocks unless external service
-- Test file mirrors source: src/foo.py → tests/test_foo.py
-"""
-
-    def _handle_dispatch_assimilate(self, arguments: dict) -> list[TextContent]:
-        """Handle dispatch_assimilate tool call - deprecated."""
-        return [TextContent(
-            type="text",
-            text=(
-                "dispatch_assimilate is deprecated. "
-                "Use get_manifest instead - it's now fast enough (<2s) for synchronous use."
-            )
-        )]
 
     def _handle_dispatch(self, arguments: dict) -> list[TextContent]:
         """Handle dispatch — routes to active session or launches new one."""
@@ -386,19 +274,21 @@ class ClaudeCodeMCPServer:
         # Try routing to an active session first
         active = self._dispatch_guard.find_active_session(project_path, tracker)
         if active and active.socket_port:
-            return self._dispatch_to_session(active, content, project_path)
+            result = self._try_session_send(active, content, tracker)
+            if result:
+                return result
+            # Socket dead — fall through to fresh launch
 
         if blocking := self._dispatch_guard.check_duplicate(content):
             return [TextContent(type="text", text=json.dumps(blocking, indent=2))]
 
         return self._dispatch_new(content, project_path, cli, model, tracker)
 
-    def _dispatch_to_session(self, task, content: str, project_path: str) -> list[TextContent]:
-        """Send a follow-up prompt to an existing GUI session via socket."""
+    def _try_session_send(self, task, content: str, tracker: TaskTracker) -> list[TextContent] | None:
+        """Try sending to an active session. Returns response on success, None if dead."""
         from gui.session import send_prompt
 
-        success = send_prompt(task.socket_port, content)
-        if success:
+        if send_prompt(task.socket_port, content):
             return [TextContent(type="text", text=json.dumps({
                 "status": "session_followup",
                 "task_id": task.task_id,
@@ -406,13 +296,10 @@ class ClaudeCodeMCPServer:
                 "message": "Follow-up sent to active session. Output appears in the existing GUI window.",
             }, indent=2))]
 
-        # Socket dead — session closed. Clear port and fall through to new launch.
+        # Socket dead — clear port so we don't try again
         task.socket_port = None
-        TaskTracker()._save(task)
-        return [TextContent(type="text", text=json.dumps({
-            "status": "session_expired",
-            "message": "Previous session closed. Dispatch again to start a new session.",
-        }, indent=2))]
+        tracker._save(task)
+        return None
 
     def _dispatch_new(self, content: str, project_path: str, cli: str,
                       model: str | None, tracker: TaskTracker) -> list[TextContent]:
@@ -425,6 +312,7 @@ class ClaudeCodeMCPServer:
 
         task_id = tracker.create_task(project_path, cli)
         self._dispatch_guard.record_dispatch(content, task_id)
+        length_warning = self._dispatch_guard.check_length(content)
 
         prompt_file = Path(project_path) / "_dispatch_prompt.txt"
         prompt_file.write_text(full_prompt, encoding='utf-8')
@@ -447,14 +335,17 @@ class ClaudeCodeMCPServer:
         )
 
         cli_names = {"claude": "Claude Code", "gemini": "Gemini CLI", "codex": "OpenAI Codex"}
-        return [TextContent(type="text", text=json.dumps({
+        response: dict = {
             "status": "launched",
             "task_id": task_id,
             "cli": cli_names.get(cli, cli),
             "model": model or "default",
             "project_path": project_path,
             "message": "Task launched. DO NOT call get_task_result - wait for user to confirm completion.",
-        }, indent=2))]
+        }
+        if length_warning is not None:
+            response["dispatch_warning"] = length_warning
+        return [TextContent(type="text", text=json.dumps(response, indent=2))]
 
     def _handle_get_task_result(self, arguments: dict) -> list[TextContent]:
         """Handle get_task_result tool call."""

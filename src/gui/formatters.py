@@ -187,6 +187,9 @@ def format_claude_line(line: str, stats: dict, state: dict) -> list[FormattedSeg
     if msg_type == "assistant":
         content = data.get("message", {}).get("content", [])
         segs = []
+        has_tool = any(b.get("type") == "tool_use" for b in content)
+        if has_tool:
+            segs.append(_seg("<br>"))
         for block in content:
             if block.get("type") == "tool_use":
                 stats["tools_used"] += 1
@@ -199,7 +202,26 @@ def format_claude_line(line: str, stats: dict, state: dict) -> list[FormattedSeg
     if msg_type == "result":
         return [_seg("<br>")]
 
+    # Log unknown types for discovery
+    _log_unknown_type(msg_type, data)
     return []
+
+
+def _log_unknown_type(msg_type: str, data: dict) -> None:
+    """Write unhandled message types to debug log for discovery."""
+    log_path = Path.home() / ".conductor" / "stream_debug.jsonl"
+    try:
+        import time as _t
+        entry = {"ts": _t.time(), "type": msg_type, "keys": list(data.keys())}
+        # Include subagent-related fields if present
+        for key in ("subagent_id", "agent_id", "task_id", "status", "event", "tool_name", "name"):
+            if key in data:
+                val = data[key]
+                entry[key] = val[:200] if isinstance(val, str) else val
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry) + "\n")
+    except Exception:
+        pass
 
 
 def _handle_stream_event(data: dict, stats: dict) -> list[FormattedSegment]:
@@ -210,7 +232,10 @@ def _handle_stream_event(data: dict, stats: dict) -> list[FormattedSegment]:
         delta = event.get("delta", {})
         if delta.get("type") == "text_delta":
             text = delta.get("text", "")
-            return [_seg(_apply_inline_markdown(text))]
+            html = _apply_inline_markdown(text)
+            # Wrap in pre-formatted span to preserve whitespace between fragments
+            html = f"<span style='white-space:pre-wrap;'>{html}</span>"
+            return [_seg(html)]
         return []
 
     if event_type == "content_block_start":
@@ -316,7 +341,7 @@ def format_turn_separator(turn_number: int) -> str:
     )
 
 
-def format_summary_card(stats: dict) -> str:
+def format_summary_card(stats: dict, turn: int = 1) -> str:
     import time
     duration = int(time.time() - stats["start_time"])
     files_read = len(stats["files_read"])
@@ -334,7 +359,7 @@ def format_summary_card(stats: dict) -> str:
     lines = [
         f"<div style='background:{_c('bg_secondary')}; border:1px solid {_c('border')}; "
         f"border-radius:6px; padding:12px 16px; margin:8px 0;'>",
-        f"<div style='color:{_c('accent_blue')}; font-weight:bold; margin-bottom:8px;'>Summary</div>",
+        f"<div style='color:{_c('accent_blue')}; font-weight:bold; margin-bottom:8px;'>Summary (Turn {turn})</div>",
         f"<div style='color:{_c('text_primary')};'>Duration: {duration}s</div>",
         f"<div style='color:{_c('text_primary')};'>Files read: {files_read}</div>",
         f"<div style='color:{written_color};'>Files modified: {len(files_written)}"
