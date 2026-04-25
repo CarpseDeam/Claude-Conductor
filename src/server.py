@@ -148,6 +148,24 @@ Write code that looks inevitable. Follow these constraints:
 - Read the actual source files and match existing patterns in this codebase
 - Write idiomatic code — do not transliterate the dispatch
 
+**Stay in scope**
+- Do exactly what the dispatch asks. Nothing more.
+- No "while I'm here" refactors. No enriching adjacent code. No fixing unrelated issues.
+- If you spot a real bug outside scope, mention it in the summary — do not fix it.
+- Skip TodoWrite for anything under ~5 discrete steps. Just do the work.
+
+**Tests — minimal and targeted**
+- Do not write new tests unless the dispatch explicitly asks.
+- Do not run the full test suite. If verification is needed, run only tests covering files you touched.
+- Do not fix pre-existing test failures unrelated to your change.
+- If the dispatch does not mention tests, skip them entirely.
+
+**Tool call efficiency**
+- Read each file at most once unless you have edited it since.
+- Search for specific things, not speculatively. Do not grep "to understand the codebase."
+- Stop when the dispatch's request is met. Do not validate exhaustively.
+- Prefer one decisive edit over multiple incremental ones on the same file.
+
 The best code is code you delete. Every line is a liability.
 """
 
