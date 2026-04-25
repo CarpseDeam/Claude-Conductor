@@ -178,8 +178,12 @@ def format_claude_line(line: str, stats: dict, state: dict) -> list[FormattedSeg
     msg_type = data.get("type", "")
 
     if msg_type == "system":
-        session = data.get("session_id", "")[:8]
-        return [_seg(_span(f"[Session: {session}...]", _c("text_muted")) + "<br>", SegmentType.SYSTEM)]
+        session_id = data.get("session_id", "")
+        shown = state.setdefault("sessions_shown", set())
+        if session_id in shown:
+            return []
+        shown.add(session_id)
+        return [_seg(_span(f"[Session: {session_id[:8]}...]", _c("text_muted")) + "<br>", SegmentType.SYSTEM)]
 
     if msg_type == "stream_event":
         return _handle_stream_event(data, stats)
