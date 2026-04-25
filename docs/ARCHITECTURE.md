@@ -12,7 +12,7 @@ Stdio-based MCP server exposing tools to Claude Desktop:
 - Tool registration and schema
 - Request routing to handlers
 - **DispatchGuard**: Prevents concurrent tasks for the same project and deduplicates identical requests. Includes socket probing to verify active sessions and enforces a 30-minute session max age.
-- **Intent Guidance**: System prompt instructs agents to treat dispatch as intent rather than a strict blueprint, encouraging them to read source files and follow existing patterns.
+- **Intent Guidance**: System prompt instructs agents to treat dispatch as intent rather than a strict blueprint, follow existing patterns, stay strictly in scope, and prioritize tool call efficiency with minimal, targeted testing.
 - JSON response formatting
 
 ### Codebase Mapper (`src/mapper/`) [INTERNAL]

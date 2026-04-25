@@ -6,6 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+- 2026-04-24: feat: add operational constraints (scope, minimal testing, tool efficiency) to agent steering prompt
 - 2026-04-24: refactor: remove `get_manifest` and `dispatch_assimilate` tools as CLI agents now handle codebase discovery autonomously
 - 2026-04-24: feat: update system prompt to emphasize intent-based dispatching over implementation blueprints
 - 2026-04-24: feat: improve session routing with socket probing and session max age (30 mins)
